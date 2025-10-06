@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS organization;
+DROP TABLE IF EXISTS branches;
+DROP TABLE IF EXISTS auth;
+DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS sales;
+DROP TABLE IF EXISTS partners;
+DROP TABLE IF EXISTS partners_payment_receipt;
+DROP TABLE IF EXISTS purchases;
+DROP TABLE IF EXISTS activity;
+DROP TABLE IF EXISTS configuration;

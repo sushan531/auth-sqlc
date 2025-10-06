@@ -1,0 +1,17 @@
+version: "2"
+cloud:
+  project: '01K6WA9NZZEBKHZ7YSSEPDVTZC'
+sql:
+  - engine: "postgresql"
+    queries:
+      - "raw/*/*.sql"
+    schema: "migrations"
+    gen:
+      go:
+        emit_json_tags: true
+        package: "generated"
+        out: "generated/"
+        overrides:
+          # https://github.com/sqlc-dev/sqlc/issues/421
+          - db_type: "pg_catalog.numeric"
+            go_type: "github.com/shopspring/decimal.Decimal"
