@@ -56,6 +56,9 @@ func main() {
 	// Test Product operations
 	testProductOperations(ctx, queries)
 
+	// Test Purchase operations with product insert/update
+	testPurchaseOperations(ctx, queries)
+
 	fmt.Println("\n✅ All tests completed successfully!")
 }
 
@@ -268,4 +271,144 @@ func testProductOperations(ctx context.Context, queries *generated.Queries) {
 	for _, m := range mapping {
 		fmt.Printf("   - %s -> %s\n", m.BranchName, m.ProductName)
 	}
+}
+
+func testPurchaseOperations(ctx context.Context, queries *generated.Queries) {
+	fmt.Println("\n🛒 Testing Purchase Operations with InsertOrUpdateProductsWithPurchasesAndPurchaseGroup...")
+
+	// Create organization and branch for purchase test
+	orgName := fmt.Sprintf("Purchase Test Org %d", time.Now().Unix())
+	org, err := queries.InsertOrganization(ctx, orgName)
+	if err != nil {
+		log.Printf("❌ Failed to create organization for purchase test: %v", err)
+		return
+	}
+
+	branchParams := generated.InsertBranchParams{
+		UniqueName:     fmt.Sprintf("purchase_branch_%d", time.Now().Unix()),
+		BranchName:     "Purchase Test Branch",
+		OrganizationID: org.ID,
+	}
+
+	branch, err := queries.InsertBranch(ctx, branchParams)
+	if err != nil {
+		log.Printf("❌ Failed to create branch for purchase test: %v", err)
+		return
+	}
+
+	// Create a test user for purchases
+	userParams := generated.InsertAuthParams{
+		UserEmail:      fmt.Sprintf("purchase_user_%d@example.com", time.Now().Unix()),
+		Password:       "hashed_password_here",
+		OrganizationID: org.ID,
+		Role:           sql.NullString{String: "admin", Valid: true},
+		BranchUuids:    []uuid.UUID{branch.ID},
+	}
+
+	user, err := queries.InsertAuth(ctx, userParams)
+	if err != nil {
+		log.Printf("❌ Failed to create user for purchase test: %v", err)
+		return
+	}
+
+	fmt.Printf("✅ Created test environment: Org: %s, Branch: %s, User: %s\n",
+		org.Name, branch.BranchName, user.UserEmail)
+
+	// Test 1: INSERT scenario - New products with purchase
+	fmt.Println("\n📥 Test 1: INSERT - Creating new products with purchase...")
+
+	insertParams := generated.InsertOrUpdateProductsWithPurchasesAndPurchaseGroupParams{
+		Supplier:       sql.NullString{String: "ABC Supplier", Valid: true},
+		TotalCost:      decimal.NewFromFloat(500.00),
+		PaymentMethod:  sql.NullString{String: "cash", Valid: true},
+		BranchUuid:     branch.ID,
+		UserEmail:      user.UserEmail,
+		Comments:       sql.NullString{String: "Initial purchase of new products", Valid: true},
+		PartnerID:      uuid.NullUUID{Valid: false}, // No partner for this test
+		OrganizationID: org.ID,
+		// Product arrays (Column9-14)
+		Column9: []string{"Laptop", "Mouse"}, // product_name
+		Column10: []string{fmt.Sprintf("laptop_%d", time.Now().Unix()),
+			fmt.Sprintf("mouse_%d", time.Now().Unix())}, // unique_name
+		Column11: []decimal.Decimal{decimal.NewFromFloat(400.00),
+			decimal.NewFromFloat(25.00)}, // unit_purchase_price
+		Column12: []decimal.Decimal{decimal.NewFromFloat(1),
+			decimal.NewFromFloat(4)}, // units
+		Column13: []decimal.Decimal{decimal.NewFromFloat(450.00),
+			decimal.NewFromFloat(30.00)}, // selling_price
+		Column14: []string{"pieces", "pieces"}, // measurement_unit
+	}
+
+	insertPurchases, err := queries.InsertOrUpdateProductsWithPurchasesAndPurchaseGroup(ctx, insertParams)
+	if err != nil {
+		log.Printf("❌ Failed to insert products with purchases: %v", err)
+		return
+	}
+
+	fmt.Printf("✅ INSERT: Created %d purchase records\n", len(insertPurchases))
+	for i, purchase := range insertPurchases {
+		fmt.Printf("   Purchase %d: %s - %s units at $%s each\n",
+			i+1, purchase.ProductName, purchase.Units.String(), purchase.UnitPurchasePrice.String())
+	}
+
+	// Verify products were created
+	productNames, err := queries.ListAllProductNames(ctx, org.ID)
+	if err != nil {
+		log.Printf("❌ Failed to list products after insert: %v", err)
+		return
+	}
+	fmt.Printf("✅ Products in system after INSERT: %v\n", productNames)
+
+	// Test 2: UPDATE scenario - Adding more quantity to existing products
+	fmt.Println("\n📤 Test 2: UPDATE - Adding more quantity to existing products...")
+
+	// Wait a moment to ensure different timestamps
+	time.Sleep(1 * time.Second)
+
+	updateParams := generated.InsertOrUpdateProductsWithPurchasesAndPurchaseGroupParams{
+		Supplier:       sql.NullString{String: "XYZ Supplier", Valid: true},
+		TotalCost:      decimal.NewFromFloat(300.00),
+		PaymentMethod:  sql.NullString{String: "bank", Valid: true},
+		BranchUuid:     branch.ID,
+		UserEmail:      user.UserEmail,
+		Comments:       sql.NullString{String: "Restocking existing products", Valid: true},
+		PartnerID:      uuid.NullUUID{Valid: false},
+		OrganizationID: org.ID,
+		// Using same unique_names to trigger UPDATE
+		Column9:  []string{"Laptop Pro", "Wireless Mouse"}, // product_name (updated)
+		Column10: insertParams.Column10,                    // same unique_name (triggers update)
+		Column11: []decimal.Decimal{decimal.NewFromFloat(380.00),
+			decimal.NewFromFloat(22.00)}, // unit_purchase_price (new)
+		Column12: []decimal.Decimal{decimal.NewFromFloat(2),
+			decimal.NewFromFloat(6)}, // units (will be added)
+		Column13: []decimal.Decimal{decimal.NewFromFloat(420.00),
+			decimal.NewFromFloat(28.00)}, // selling_price (updated)
+		Column14: []string{"pieces", "pieces"}, // measurement_unit
+	}
+
+	updatePurchases, err := queries.InsertOrUpdateProductsWithPurchasesAndPurchaseGroup(ctx, updateParams)
+	if err != nil {
+		log.Printf("❌ Failed to update products with purchases: %v", err)
+		return
+	}
+
+	fmt.Printf("✅ UPDATE: Created %d purchase records for restocking\n", len(updatePurchases))
+	for i, purchase := range updatePurchases {
+		fmt.Printf("   Purchase %d: %s - %s units at $%s each\n",
+			i+1, purchase.ProductName, purchase.Units.String(), purchase.UnitPurchasePrice.String())
+	}
+
+	// Verify products were updated (should still be same count but with updated quantities)
+	finalProductNames, err := queries.ListAllProductNames(ctx, org.ID)
+	if err != nil {
+		log.Printf("❌ Failed to list products after update: %v", err)
+		return
+	}
+	fmt.Printf("✅ Products in system after UPDATE: %v\n", finalProductNames)
+
+	// Show the difference in behavior
+	fmt.Println("\n📊 Summary of INSERT vs UPDATE behavior:")
+	fmt.Println("   INSERT: Creates new products with initial quantities")
+	fmt.Println("   UPDATE: Adds to existing product quantities and updates selling prices")
+	fmt.Printf("   Total products created: %d (same unique_name triggers update, not duplicate)\n", len(finalProductNames))
 }

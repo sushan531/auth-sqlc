@@ -40,7 +40,7 @@ SELECT i.product_name,
     i.selling_price,
     i.units, -- initial quantity
     $4,      -- branch_uuid
-    i.measurement_unit::measurement_unit_types,
+    i.measurement_unit,
     $8       -- organization_id
 FROM input_data i
 ON CONFLICT (unique_name) DO UPDATE

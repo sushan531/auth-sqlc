@@ -83,6 +83,12 @@ The `main.go` file demonstrates the usage of all major SQLC generated functions:
   - `ListAllProductNames`
   - `GetBranchToProductMapping`
 
+### 🛒 Purchase Operations
+- Demonstrates the `InsertOrUpdateProductsWithPurchasesAndPurchaseGroup` function with both INSERT and UPDATE scenarios:
+  - **INSERT**: Creates new products with initial purchase quantities
+  - **UPDATE**: Adds inventory to existing products (identified by unique_name) and updates selling prices
+- Shows how the same function handles both creating new products and restocking existing ones
+
 ## Expected Output
 
 When you run the application successfully, you should see output like:
