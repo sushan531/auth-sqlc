@@ -72,12 +72,12 @@ type Activity struct {
 }
 
 type Auth struct {
-	ID             uuid.UUID      `json:"id"`
-	UserEmail      string         `json:"user_email"`
-	Password       string         `json:"password"`
-	OrganizationID uuid.UUID      `json:"organization_id"`
-	BranchUuids    []uuid.UUID    `json:"branch_uuids"`
-	Role           sql.NullString `json:"role"`
+	ID            uuid.UUID      `json:"id"`
+	UserEmail     string         `json:"user_email"`
+	Password      string         `json:"password"`
+	KeysetData    sql.NullString `json:"keyset_data"`
+	EncryptionKey sql.NullString `json:"encryption_key"`
+	UserProfileID uuid.UUID      `json:"user_profile_id"`
 }
 
 type Branch struct {
@@ -115,7 +115,7 @@ type PartnerPaymentReceipt struct {
 	RecordType     sql.NullString  `json:"record_type"`
 	Amount         decimal.Decimal `json:"amount"`
 	BranchUuid     uuid.UUID       `json:"branch_uuid"`
-	UserEmail      string          `json:"user_email"`
+	UserProfileID  uuid.UUID       `json:"user_profile_id"`
 	Comments       sql.NullString  `json:"comments"`
 	OrganizationID uuid.UUID       `json:"organization_id"`
 }
@@ -151,7 +151,7 @@ type PurchaseGroup struct {
 	PurchaseDate    time.Time       `json:"purchase_date"`
 	PaymentMethod   sql.NullString  `json:"payment_method"`
 	BranchUuid      uuid.UUID       `json:"branch_uuid"`
-	UserEmail       string          `json:"user_email"`
+	UserProfileID   uuid.UUID       `json:"user_profile_id"`
 	Comments        sql.NullString  `json:"comments"`
 	PartnerID       uuid.NullUUID   `json:"partner_id"`
 	OrganizationID  uuid.UUID       `json:"organization_id"`
@@ -175,8 +175,22 @@ type SalesGroup struct {
 	PaymentMethod  sql.NullString  `json:"payment_method"`
 	SoldDate       time.Time       `json:"sold_date"`
 	BranchUuid     uuid.UUID       `json:"branch_uuid"`
-	UserEmail      string          `json:"user_email"`
+	UserProfileID  uuid.UUID       `json:"user_profile_id"`
 	OrganizationID uuid.UUID       `json:"organization_id"`
 	CustomerName   sql.NullString  `json:"customer_name"`
 	Comments       sql.NullString  `json:"comments"`
+}
+
+type UserOrganizationBranch struct {
+	ID             uuid.UUID   `json:"id"`
+	UserProfileID  uuid.UUID   `json:"user_profile_id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	BranchUuids    []uuid.UUID `json:"branch_uuids"`
+}
+
+type UserProfile struct {
+	ID       uuid.UUID      `json:"id"`
+	FullName string         `json:"full_name"`
+	Address  sql.NullString `json:"address"`
+	UserRole sql.NullString `json:"user_role"`
 }

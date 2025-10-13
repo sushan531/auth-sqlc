@@ -1,40 +1,36 @@
--- name: InsertAuth :one
-INSERT INTO auth (user_email, password, organization_id, role, branch_uuids)
-VALUES ($1, $2, $3, $4, $5)
+-- name: InsertUserProfile :one
+WITH user_profile_insert AS (
+INSERT INTO user_profile (full_name, address, user_role)
+VALUES ($1, $2, $3)
+    RETURNING id
+)
+INSERT INTO auth (user_email, password, user_profile_id)
+VALUES ($4, $5, (SELECT id FROM user_profile_insert))
     RETURNING *;
 
--- name: GetAuth :one
-SELECT user_email, organization_id, role, password, branch_uuids
-FROM auth
-WHERE user_email = $1;
 
--- name: GetUserByEmail :one
-SELECT user_email, organization_id, role, branch_uuids
-FROM auth
-WHERE user_email = $1;
-
--- name: GetAllUsers :many
-SELECT user_email, role, branch_uuids
-FROM auth
-WHERE organization_id = $1;
+-- name: GetUserProfile :one
+SELECT up.full_name, up.user_role, a.user_email
+FROM user_profile up
+INNER JOIN auth a USING (id)
+WHERE a.user_email = $1;
 
 
 -- name: ConditionalUpdateAuth :one
 UPDATE auth
-SET password     = CASE
+SET password        = CASE
                        WHEN $1::INT = 1 THEN $2
                        ELSE password
 END,
-    branch_uuids = CASE
+    keyset_data     = CASE
                        WHEN $3::INT = 1 THEN $4
-                       ELSE branch_uuids
+                       ELSE keyset_data
 END,
-    role         = CASE
+    encryption_key  = CASE
                        WHEN $5::INT = 1 THEN $6
-                       ELSE role
+                       ELSE encryption_key
 END
 WHERE user_email = $7
-  AND organization_id = $8
 RETURNING *;
 
 -- name: InsertOrganization :one

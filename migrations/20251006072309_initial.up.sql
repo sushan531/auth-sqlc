@@ -1,10 +1,32 @@
+-- Create User Profile Table
+CREATE TABLE IF NOT EXISTS user_profile(
+    id          uuid DEFAULT uuidv7() PRIMARY KEY,
+    full_name   VARCHAR(255) NOT NULL,
+    address     VARCHAR(255),
+    user_role   TEXT CHECK (
+            user_role IN ('admin', 'adminReadOnly', 'branchManager', 'branchReadOnly', 'sales')
+        )
+    );
+
 -- Creating the ParentCompany table
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS organization
 (
     id   uuid DEFAULT uuidv7() PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE
     );
+
+-- Creating the Auth table
+CREATE TABLE IF NOT EXISTS auth
+(
+    id              uuid DEFAULT uuidv7() PRIMARY KEY,
+    user_email      VARCHAR(255) NOT NULL UNIQUE,
+    password        VARCHAR(255) NOT NULL,
+    keyset_data     TEXT,
+    encryption_key  TEXT,
+    user_profile_id uuid NOT NULL,
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id)
+    );
+
 
 -- Creating the Branches table
 CREATE TABLE IF NOT EXISTS branches
@@ -16,17 +38,14 @@ CREATE TABLE IF NOT EXISTS branches
     FOREIGN KEY (organization_id) REFERENCES organization (id)
     );
 
--- Creating the Auth table
-CREATE TABLE IF NOT EXISTS auth
-(
+
+-- Create UserOrganizationBranchTable
+CREATE TABLE IF NOT EXISTS user_organization_branches(
     id              uuid DEFAULT uuidv7() PRIMARY KEY,
-    user_email      VARCHAR(255) NOT NULL UNIQUE,
-    password        VARCHAR(255) NOT NULL,
+    user_profile_id uuid NOT NULL,
     organization_id uuid NOT NULL,
     branch_uuids    uuid[] DEFAULT '{}', -- changed from TEXT ARRAY to uuid[]
-    role            TEXT CHECK (
-                                   role IN ('admin', 'adminReadOnly', 'branchManager', 'branchReadOnly', 'sales')
-    ),
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id),
     FOREIGN KEY (organization_id) REFERENCES organization (id)
     );
 
@@ -56,13 +75,13 @@ CREATE TABLE IF NOT EXISTS sales_group
     payment_method  TEXT CHECK (payment_method IN ('cash', 'bank', 'credit')),
     sold_date       TIMESTAMP NOT NULL DEFAULT NOW(),
     branch_uuid     uuid NOT NULL,
-    user_email      VARCHAR(255) NOT NULL,
+    user_profile_id uuid NOT NULL,
     organization_id uuid NOT NULL,
     customer_name   VARCHAR(255),
     comments        TEXT,
     FOREIGN KEY (branch_uuid) REFERENCES branches (id),
     FOREIGN KEY (organization_id) REFERENCES organization (id),
-    FOREIGN KEY (user_email) REFERENCES auth (user_email)
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id)
     );
 
 -- Create the SalesTable
@@ -104,11 +123,11 @@ CREATE TABLE IF NOT EXISTS partner_payment_receipt
     record_type     TEXT CHECK (record_type IN ('debit', 'credit')),
     amount          DECIMAL(20, 2) NOT NULL,
     branch_uuid     uuid NOT NULL, -- changed
-    user_email      VARCHAR(255) NOT NULL,
+    user_profile_id uuid NOT NULL,
     comments        TEXT,
     organization_id uuid NOT NULL,
     FOREIGN KEY (organization_id) REFERENCES organization (id),
-    FOREIGN KEY (user_email) REFERENCES auth (user_email),
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id),
     FOREIGN KEY (partner_id) REFERENCES partners (partner_id),
     FOREIGN KEY (branch_uuid) REFERENCES branches (id)
     );
@@ -122,14 +141,14 @@ CREATE TABLE IF NOT EXISTS purchase_group
     purchase_date     TIMESTAMP NOT NULL DEFAULT NOW(),
     payment_method    TEXT CHECK (payment_method IN ('cash', 'bank', 'credit')),
     branch_uuid       uuid NOT NULL,
-    user_email        VARCHAR(255) NOT NULL,
+    user_profile_id   uuid NOT NULL,
     comments          TEXT,
     partner_id        uuid,
     organization_id   uuid NOT NULL,
     FOREIGN KEY (branch_uuid) REFERENCES branches (id),
     FOREIGN KEY (organization_id) REFERENCES organization (id),
     FOREIGN KEY (partner_id) REFERENCES partners (partner_id),
-    FOREIGN KEY (user_email) REFERENCES auth (user_email)
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id)
     );
 
 -- Create the ProductPurchaseTable

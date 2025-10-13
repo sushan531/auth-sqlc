@@ -8,39 +8,34 @@ package generated
 import (
 	"context"
 	"database/sql"
-
-	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
 
 const conditionalUpdateAuth = `-- name: ConditionalUpdateAuth :one
 UPDATE auth
-SET password     = CASE
+SET password        = CASE
                        WHEN $1::INT = 1 THEN $2
                        ELSE password
 END,
-    branch_uuids = CASE
+    keyset_data     = CASE
                        WHEN $3::INT = 1 THEN $4
-                       ELSE branch_uuids
+                       ELSE keyset_data
 END,
-    role         = CASE
+    encryption_key  = CASE
                        WHEN $5::INT = 1 THEN $6
-                       ELSE role
+                       ELSE encryption_key
 END
 WHERE user_email = $7
-  AND organization_id = $8
-RETURNING id, user_email, password, organization_id, branch_uuids, role
+RETURNING id, user_email, password, keyset_data, encryption_key, user_profile_id
 `
 
 type ConditionalUpdateAuthParams struct {
-	Column1        int32          `json:"column_1"`
-	Password       string         `json:"password"`
-	Column3        int32          `json:"column_3"`
-	BranchUuids    []uuid.UUID    `json:"branch_uuids"`
-	Column5        int32          `json:"column_5"`
-	Role           sql.NullString `json:"role"`
-	UserEmail      string         `json:"user_email"`
-	OrganizationID uuid.UUID      `json:"organization_id"`
+	Column1       int32          `json:"column_1"`
+	Password      string         `json:"password"`
+	Column3       int32          `json:"column_3"`
+	KeysetData    sql.NullString `json:"keyset_data"`
+	Column5       int32          `json:"column_5"`
+	EncryptionKey sql.NullString `json:"encryption_key"`
+	UserEmail     string         `json:"user_email"`
 }
 
 func (q *Queries) ConditionalUpdateAuth(ctx context.Context, arg ConditionalUpdateAuthParams) (Auth, error) {
@@ -48,82 +43,19 @@ func (q *Queries) ConditionalUpdateAuth(ctx context.Context, arg ConditionalUpda
 		arg.Column1,
 		arg.Password,
 		arg.Column3,
-		pq.Array(arg.BranchUuids),
+		arg.KeysetData,
 		arg.Column5,
-		arg.Role,
+		arg.EncryptionKey,
 		arg.UserEmail,
-		arg.OrganizationID,
 	)
 	var i Auth
 	err := row.Scan(
 		&i.ID,
 		&i.UserEmail,
 		&i.Password,
-		&i.OrganizationID,
-		pq.Array(&i.BranchUuids),
-		&i.Role,
-	)
-	return i, err
-}
-
-const getAllUsers = `-- name: GetAllUsers :many
-SELECT user_email, role, branch_uuids
-FROM auth
-WHERE organization_id = $1
-`
-
-type GetAllUsersRow struct {
-	UserEmail   string         `json:"user_email"`
-	Role        sql.NullString `json:"role"`
-	BranchUuids []uuid.UUID    `json:"branch_uuids"`
-}
-
-func (q *Queries) GetAllUsers(ctx context.Context, organizationID uuid.UUID) ([]GetAllUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, getAllUsers, organizationID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetAllUsersRow
-	for rows.Next() {
-		var i GetAllUsersRow
-		if err := rows.Scan(&i.UserEmail, &i.Role, pq.Array(&i.BranchUuids)); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getAuth = `-- name: GetAuth :one
-SELECT user_email, organization_id, role, password, branch_uuids
-FROM auth
-WHERE user_email = $1
-`
-
-type GetAuthRow struct {
-	UserEmail      string         `json:"user_email"`
-	OrganizationID uuid.UUID      `json:"organization_id"`
-	Role           sql.NullString `json:"role"`
-	Password       string         `json:"password"`
-	BranchUuids    []uuid.UUID    `json:"branch_uuids"`
-}
-
-func (q *Queries) GetAuth(ctx context.Context, userEmail string) (GetAuthRow, error) {
-	row := q.db.QueryRowContext(ctx, getAuth, userEmail)
-	var i GetAuthRow
-	err := row.Scan(
-		&i.UserEmail,
-		&i.OrganizationID,
-		&i.Role,
-		&i.Password,
-		pq.Array(&i.BranchUuids),
+		&i.KeysetData,
+		&i.EncryptionKey,
+		&i.UserProfileID,
 	)
 	return i, err
 }
@@ -141,62 +73,23 @@ func (q *Queries) GetOrganization(ctx context.Context, name string) (Organizatio
 	return i, err
 }
 
-const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT user_email, organization_id, role, branch_uuids
-FROM auth
-WHERE user_email = $1
+const getUserProfile = `-- name: GetUserProfile :one
+SELECT up.full_name, up.user_role, a.user_email
+FROM user_profile up
+INNER JOIN auth a USING (id)
+WHERE a.user_email = $1
 `
 
-type GetUserByEmailRow struct {
-	UserEmail      string         `json:"user_email"`
-	OrganizationID uuid.UUID      `json:"organization_id"`
-	Role           sql.NullString `json:"role"`
-	BranchUuids    []uuid.UUID    `json:"branch_uuids"`
+type GetUserProfileRow struct {
+	FullName  string         `json:"full_name"`
+	UserRole  sql.NullString `json:"user_role"`
+	UserEmail string         `json:"user_email"`
 }
 
-func (q *Queries) GetUserByEmail(ctx context.Context, userEmail string) (GetUserByEmailRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmail, userEmail)
-	var i GetUserByEmailRow
-	err := row.Scan(
-		&i.UserEmail,
-		&i.OrganizationID,
-		&i.Role,
-		pq.Array(&i.BranchUuids),
-	)
-	return i, err
-}
-
-const insertAuth = `-- name: InsertAuth :one
-INSERT INTO auth (user_email, password, organization_id, role, branch_uuids)
-VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, user_email, password, organization_id, branch_uuids, role
-`
-
-type InsertAuthParams struct {
-	UserEmail      string         `json:"user_email"`
-	Password       string         `json:"password"`
-	OrganizationID uuid.UUID      `json:"organization_id"`
-	Role           sql.NullString `json:"role"`
-	BranchUuids    []uuid.UUID    `json:"branch_uuids"`
-}
-
-func (q *Queries) InsertAuth(ctx context.Context, arg InsertAuthParams) (Auth, error) {
-	row := q.db.QueryRowContext(ctx, insertAuth,
-		arg.UserEmail,
-		arg.Password,
-		arg.OrganizationID,
-		arg.Role,
-		pq.Array(arg.BranchUuids),
-	)
-	var i Auth
-	err := row.Scan(
-		&i.ID,
-		&i.UserEmail,
-		&i.Password,
-		&i.OrganizationID,
-		pq.Array(&i.BranchUuids),
-		&i.Role,
-	)
+func (q *Queries) GetUserProfile(ctx context.Context, userEmail string) (GetUserProfileRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserProfile, userEmail)
+	var i GetUserProfileRow
+	err := row.Scan(&i.FullName, &i.UserRole, &i.UserEmail)
 	return i, err
 }
 
@@ -210,5 +103,44 @@ func (q *Queries) InsertOrganization(ctx context.Context, name string) (Organiza
 	row := q.db.QueryRowContext(ctx, insertOrganization, name)
 	var i Organization
 	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
+const insertUserProfile = `-- name: InsertUserProfile :one
+WITH user_profile_insert AS (
+INSERT INTO user_profile (full_name, address, user_role)
+VALUES ($1, $2, $3)
+    RETURNING id
+)
+INSERT INTO auth (user_email, password, user_profile_id)
+VALUES ($4, $5, (SELECT id FROM user_profile_insert))
+    RETURNING id, user_email, password, keyset_data, encryption_key, user_profile_id
+`
+
+type InsertUserProfileParams struct {
+	FullName  string         `json:"full_name"`
+	Address   sql.NullString `json:"address"`
+	UserRole  sql.NullString `json:"user_role"`
+	UserEmail string         `json:"user_email"`
+	Password  string         `json:"password"`
+}
+
+func (q *Queries) InsertUserProfile(ctx context.Context, arg InsertUserProfileParams) (Auth, error) {
+	row := q.db.QueryRowContext(ctx, insertUserProfile,
+		arg.FullName,
+		arg.Address,
+		arg.UserRole,
+		arg.UserEmail,
+		arg.Password,
+	)
+	var i Auth
+	err := row.Scan(
+		&i.ID,
+		&i.UserEmail,
+		&i.Password,
+		&i.KeysetData,
+		&i.EncryptionKey,
+		&i.UserProfileID,
+	)
 	return i, err
 }
