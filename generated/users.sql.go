@@ -73,6 +73,24 @@ func (q *Queries) GetOrganization(ctx context.Context, name string) (Organizatio
 	return i, err
 }
 
+const getUserAuth = `-- name: GetUserAuth :one
+SELECT user_email, password
+FROM auth
+WHERE user_email = $1
+`
+
+type GetUserAuthRow struct {
+	UserEmail string `json:"user_email"`
+	Password  string `json:"password"`
+}
+
+func (q *Queries) GetUserAuth(ctx context.Context, userEmail string) (GetUserAuthRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserAuth, userEmail)
+	var i GetUserAuthRow
+	err := row.Scan(&i.UserEmail, &i.Password)
+	return i, err
+}
+
 const getUserProfile = `-- name: GetUserProfile :one
 SELECT up.full_name, up.user_role, a.user_email
 FROM user_profile up

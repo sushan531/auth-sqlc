@@ -15,6 +15,11 @@ FROM user_profile up
 INNER JOIN auth a USING (id)
 WHERE a.user_email = $1;
 
+-- name: GetUserAuth :one
+SELECT user_email, password
+FROM auth
+WHERE user_email = $1;
+
 
 -- name: ConditionalUpdateAuth :one
 UPDATE auth
