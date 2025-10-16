@@ -15,6 +15,22 @@ FROM user_profile up
 INNER JOIN auth a USING (id)
 WHERE a.user_email = $1;
 
+-- name: GetUserKeySet :one
+SELECT keyset_data, encryption_key
+FROM auth
+WHERE user_profile_id = $1;
+
+-- name: DeleteUserKeySet :one
+UPDATE auth
+SET keyset_data = '',  encryption_key = ''
+WHERE user_profile_id = $1
+RETURNING *;
+
+-- name: GetAllUserKeySet :many
+SELECT keyset_data, encryption_key
+FROM auth
+ORDER BY id DESC;
+
 -- name: GetUserAuth :one
 SELECT user_email, password
 FROM auth

@@ -8,6 +8,8 @@ package generated
 import (
 	"context"
 	"database/sql"
+
+	"github.com/google/uuid"
 )
 
 const conditionalUpdateAuth = `-- name: ConditionalUpdateAuth :one
@@ -60,6 +62,61 @@ func (q *Queries) ConditionalUpdateAuth(ctx context.Context, arg ConditionalUpda
 	return i, err
 }
 
+const deleteUserKeySet = `-- name: DeleteUserKeySet :one
+UPDATE auth
+SET keyset_data = '',  encryption_key = ''
+WHERE user_profile_id = $1
+RETURNING id, user_email, password, keyset_data, encryption_key, user_profile_id
+`
+
+func (q *Queries) DeleteUserKeySet(ctx context.Context, userProfileID uuid.UUID) (Auth, error) {
+	row := q.db.QueryRowContext(ctx, deleteUserKeySet, userProfileID)
+	var i Auth
+	err := row.Scan(
+		&i.ID,
+		&i.UserEmail,
+		&i.Password,
+		&i.KeysetData,
+		&i.EncryptionKey,
+		&i.UserProfileID,
+	)
+	return i, err
+}
+
+const getAllUserKeySet = `-- name: GetAllUserKeySet :many
+SELECT keyset_data, encryption_key
+FROM auth
+ORDER BY id DESC
+`
+
+type GetAllUserKeySetRow struct {
+	KeysetData    sql.NullString `json:"keyset_data"`
+	EncryptionKey sql.NullString `json:"encryption_key"`
+}
+
+func (q *Queries) GetAllUserKeySet(ctx context.Context) ([]GetAllUserKeySetRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllUserKeySet)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllUserKeySetRow
+	for rows.Next() {
+		var i GetAllUserKeySetRow
+		if err := rows.Scan(&i.KeysetData, &i.EncryptionKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOrganization = `-- name: GetOrganization :one
 SELECT id, name
 FROM organization
@@ -88,6 +145,24 @@ func (q *Queries) GetUserAuth(ctx context.Context, userEmail string) (GetUserAut
 	row := q.db.QueryRowContext(ctx, getUserAuth, userEmail)
 	var i GetUserAuthRow
 	err := row.Scan(&i.UserEmail, &i.Password)
+	return i, err
+}
+
+const getUserKeySet = `-- name: GetUserKeySet :one
+SELECT keyset_data, encryption_key
+FROM auth
+WHERE user_profile_id = $1
+`
+
+type GetUserKeySetRow struct {
+	KeysetData    sql.NullString `json:"keyset_data"`
+	EncryptionKey sql.NullString `json:"encryption_key"`
+}
+
+func (q *Queries) GetUserKeySet(ctx context.Context, userProfileID uuid.UUID) (GetUserKeySetRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserKeySet, userProfileID)
+	var i GetUserKeySetRow
+	err := row.Scan(&i.KeysetData, &i.EncryptionKey)
 	return i, err
 }
 
