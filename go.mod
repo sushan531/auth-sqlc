@@ -1,4 +1,4 @@
-module github.com/sushan531/hk_ims_sqlc
+module github.com/sushan531/auth-sqlc
 
 go 1.25
 
