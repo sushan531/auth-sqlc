@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/sushan531/hk_ims_sqlc/generated"
+	"github.com/sushan531/auth-sqlc/generated"
 
 	_ "github.com/lib/pq"
 )
