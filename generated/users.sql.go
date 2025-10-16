@@ -84,12 +84,13 @@ func (q *Queries) DeleteUserKeySet(ctx context.Context, userProfileID uuid.UUID)
 }
 
 const getAllUserKeySet = `-- name: GetAllUserKeySet :many
-SELECT keyset_data, encryption_key
+SELECT user_profile_id, keyset_data, encryption_key
 FROM auth
 ORDER BY id DESC
 `
 
 type GetAllUserKeySetRow struct {
+	UserProfileID uuid.UUID      `json:"user_profile_id"`
 	KeysetData    sql.NullString `json:"keyset_data"`
 	EncryptionKey sql.NullString `json:"encryption_key"`
 }
@@ -103,7 +104,7 @@ func (q *Queries) GetAllUserKeySet(ctx context.Context) ([]GetAllUserKeySetRow, 
 	var items []GetAllUserKeySetRow
 	for rows.Next() {
 		var i GetAllUserKeySetRow
-		if err := rows.Scan(&i.KeysetData, &i.EncryptionKey); err != nil {
+		if err := rows.Scan(&i.UserProfileID, &i.KeysetData, &i.EncryptionKey); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -149,12 +150,13 @@ func (q *Queries) GetUserAuth(ctx context.Context, userEmail string) (GetUserAut
 }
 
 const getUserKeySet = `-- name: GetUserKeySet :one
-SELECT keyset_data, encryption_key
+SELECT user_profile_id, keyset_data, encryption_key
 FROM auth
 WHERE user_profile_id = $1
 `
 
 type GetUserKeySetRow struct {
+	UserProfileID uuid.UUID      `json:"user_profile_id"`
 	KeysetData    sql.NullString `json:"keyset_data"`
 	EncryptionKey sql.NullString `json:"encryption_key"`
 }
@@ -162,7 +164,7 @@ type GetUserKeySetRow struct {
 func (q *Queries) GetUserKeySet(ctx context.Context, userProfileID uuid.UUID) (GetUserKeySetRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserKeySet, userProfileID)
 	var i GetUserKeySetRow
-	err := row.Scan(&i.KeysetData, &i.EncryptionKey)
+	err := row.Scan(&i.UserProfileID, &i.KeysetData, &i.EncryptionKey)
 	return i, err
 }
 

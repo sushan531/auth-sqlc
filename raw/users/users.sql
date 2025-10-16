@@ -16,7 +16,7 @@ INNER JOIN auth a USING (id)
 WHERE a.user_email = $1;
 
 -- name: GetUserKeySet :one
-SELECT keyset_data, encryption_key
+SELECT user_profile_id, keyset_data, encryption_key
 FROM auth
 WHERE user_profile_id = $1;
 
@@ -27,7 +27,7 @@ WHERE user_profile_id = $1
 RETURNING *;
 
 -- name: GetAllUserKeySet :many
-SELECT keyset_data, encryption_key
+SELECT user_profile_id, keyset_data, encryption_key
 FROM auth
 ORDER BY id DESC;
 
