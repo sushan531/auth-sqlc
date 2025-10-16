@@ -51,7 +51,7 @@ END,
                        WHEN $5::INT = 1 THEN $6
                        ELSE encryption_key
 END
-WHERE user_email = $7
+WHERE user_profile_id = $7
 RETURNING *;
 
 -- name: InsertOrganization :one

@@ -26,7 +26,7 @@ END,
                        WHEN $5::INT = 1 THEN $6
                        ELSE encryption_key
 END
-WHERE user_email = $7
+WHERE user_profile_id = $7
 RETURNING id, user_email, password, keyset_data, encryption_key, user_profile_id
 `
 
@@ -37,7 +37,7 @@ type ConditionalUpdateAuthParams struct {
 	KeysetData    sql.NullString `json:"keyset_data"`
 	Column5       int32          `json:"column_5"`
 	EncryptionKey sql.NullString `json:"encryption_key"`
-	UserEmail     string         `json:"user_email"`
+	UserProfileID uuid.UUID      `json:"user_profile_id"`
 }
 
 func (q *Queries) ConditionalUpdateAuth(ctx context.Context, arg ConditionalUpdateAuthParams) (Auth, error) {
@@ -48,7 +48,7 @@ func (q *Queries) ConditionalUpdateAuth(ctx context.Context, arg ConditionalUpda
 		arg.KeysetData,
 		arg.Column5,
 		arg.EncryptionKey,
-		arg.UserEmail,
+		arg.UserProfileID,
 	)
 	var i Auth
 	err := row.Scan(
