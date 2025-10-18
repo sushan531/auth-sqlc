@@ -32,7 +32,7 @@ FROM auth
 ORDER BY id DESC;
 
 -- name: GetUserAuth :one
-SELECT user_email, password
+SELECT user_email, password, user_profile_id
 FROM auth
 WHERE user_email = $1;
 

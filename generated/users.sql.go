@@ -132,20 +132,21 @@ func (q *Queries) GetOrganization(ctx context.Context, name string) (Organizatio
 }
 
 const getUserAuth = `-- name: GetUserAuth :one
-SELECT user_email, password
+SELECT user_email, password, user_profile_id
 FROM auth
 WHERE user_email = $1
 `
 
 type GetUserAuthRow struct {
-	UserEmail string `json:"user_email"`
-	Password  string `json:"password"`
+	UserEmail     string    `json:"user_email"`
+	Password      string    `json:"password"`
+	UserProfileID uuid.UUID `json:"user_profile_id"`
 }
 
 func (q *Queries) GetUserAuth(ctx context.Context, userEmail string) (GetUserAuthRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserAuth, userEmail)
 	var i GetUserAuthRow
-	err := row.Scan(&i.UserEmail, &i.Password)
+	err := row.Scan(&i.UserEmail, &i.Password, &i.UserProfileID)
 	return i, err
 }
 
