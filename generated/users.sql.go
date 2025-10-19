@@ -172,7 +172,7 @@ func (q *Queries) GetUserKeySet(ctx context.Context, userProfileID uuid.UUID) (G
 const getUserProfile = `-- name: GetUserProfile :one
 SELECT up.full_name, up.user_role, a.user_email
 FROM user_profile up
-INNER JOIN auth a USING (id)
+         INNER JOIN auth a ON up.id = a.user_profile_id
 WHERE a.user_email = $1
 `
 
