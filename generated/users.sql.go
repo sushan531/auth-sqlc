@@ -173,7 +173,7 @@ const getUserProfile = `-- name: GetUserProfile :one
 SELECT up.full_name, up.user_role, a.user_email, a.user_profile_id
 FROM user_profile up
          INNER JOIN auth a ON up.id = a.user_profile_id
-WHERE a.user_email = $1
+WHERE a.user_profile_id = $1
 `
 
 type GetUserProfileRow struct {
@@ -183,8 +183,8 @@ type GetUserProfileRow struct {
 	UserProfileID uuid.UUID      `json:"user_profile_id"`
 }
 
-func (q *Queries) GetUserProfile(ctx context.Context, userEmail string) (GetUserProfileRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserProfile, userEmail)
+func (q *Queries) GetUserProfile(ctx context.Context, userProfileID uuid.UUID) (GetUserProfileRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserProfile, userProfileID)
 	var i GetUserProfileRow
 	err := row.Scan(
 		&i.FullName,
