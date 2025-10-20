@@ -10,7 +10,7 @@ VALUES ($4, $5, (SELECT id FROM user_profile_insert))
 
 
 -- name: GetUserProfile :one
-SELECT up.full_name, up.user_role, a.user_email
+SELECT up.full_name, up.user_role, a.user_email, a.user_profile_id
 FROM user_profile up
          INNER JOIN auth a ON up.id = a.user_profile_id
 WHERE a.user_email = $1;

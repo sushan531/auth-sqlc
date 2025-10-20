@@ -170,22 +170,28 @@ func (q *Queries) GetUserKeySet(ctx context.Context, userProfileID uuid.UUID) (G
 }
 
 const getUserProfile = `-- name: GetUserProfile :one
-SELECT up.full_name, up.user_role, a.user_email
+SELECT up.full_name, up.user_role, a.user_email, a.user_profile_id
 FROM user_profile up
          INNER JOIN auth a ON up.id = a.user_profile_id
 WHERE a.user_email = $1
 `
 
 type GetUserProfileRow struct {
-	FullName  string         `json:"full_name"`
-	UserRole  sql.NullString `json:"user_role"`
-	UserEmail string         `json:"user_email"`
+	FullName      string         `json:"full_name"`
+	UserRole      sql.NullString `json:"user_role"`
+	UserEmail     string         `json:"user_email"`
+	UserProfileID uuid.UUID      `json:"user_profile_id"`
 }
 
 func (q *Queries) GetUserProfile(ctx context.Context, userEmail string) (GetUserProfileRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserProfile, userEmail)
 	var i GetUserProfileRow
-	err := row.Scan(&i.FullName, &i.UserRole, &i.UserEmail)
+	err := row.Scan(
+		&i.FullName,
+		&i.UserRole,
+		&i.UserEmail,
+		&i.UserProfileID,
+	)
 	return i, err
 }
 
