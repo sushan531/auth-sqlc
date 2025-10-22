@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS auth
     keyset_data     TEXT,
     encryption_key  TEXT,
     user_profile_id uuid NOT NULL,
-    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id)
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id) ON DELETE CASCADE
     );
 
 
@@ -37,18 +37,18 @@ CREATE TABLE IF NOT EXISTS branches
     unique_name     VARCHAR(255) NOT NULL UNIQUE,
     branch_name     VARCHAR(255) NOT NULL,
     organization_id uuid NOT NULL,
-    FOREIGN KEY (organization_id) REFERENCES organization (id)
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE
     );
 
 
 -- Create UserOrganizationBranchTable
 CREATE TABLE IF NOT EXISTS user_organization_branches(
-                                                         id              uuid DEFAULT uuidv7() PRIMARY KEY,
+    id              uuid DEFAULT uuidv7() PRIMARY KEY,
     user_profile_id uuid NOT NULL,
     organization_id uuid NOT NULL,
     branch_uuids    uuid[] DEFAULT '{}', -- changed from TEXT ARRAY to uuid[]
-    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id),
-    FOREIGN KEY (organization_id) REFERENCES organization (id)
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id) ON DELETE CASCADE,
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE
     );
 
 -- Create the ProductsTable
@@ -64,8 +64,8 @@ CREATE TABLE IF NOT EXISTS products
     branch_uuid        uuid NOT NULL, -- changed to uuid
     measurement_unit   VARCHAR(16) NOT NULL,
     organization_id    uuid NOT NULL,
-    FOREIGN KEY (organization_id) REFERENCES organization (id),
-    FOREIGN KEY (branch_uuid) REFERENCES branches (id)
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_uuid) REFERENCES branches (id) ON DELETE CASCADE
     );
 
 -- Create the SalesGroup table
@@ -77,13 +77,13 @@ CREATE TABLE IF NOT EXISTS sales_group
     payment_method  TEXT CHECK (payment_method IN ('cash', 'bank', 'credit')),
     sold_date       TIMESTAMP NOT NULL DEFAULT NOW(),
     branch_uuid     uuid NOT NULL,
-    user_profile_id uuid NOT NULL,
+    user_profile_id uuid,
     organization_id uuid NOT NULL,
     customer_name   VARCHAR(255),
     comments        TEXT,
-    FOREIGN KEY (branch_uuid) REFERENCES branches (id),
-    FOREIGN KEY (organization_id) REFERENCES organization (id),
-    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id)
+    FOREIGN KEY (branch_uuid) REFERENCES branches (id) ON DELETE CASCADE,
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE,
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id) ON DELETE SET NULL
     );
 
 -- Create the SalesTable
@@ -113,8 +113,8 @@ CREATE TABLE IF NOT EXISTS partners
     email           VARCHAR(50),
     branch_uuid     uuid NOT NULL, -- changed
     organization_id uuid NOT NULL,
-    FOREIGN KEY (organization_id) REFERENCES organization (id),
-    FOREIGN KEY (branch_uuid) REFERENCES branches (id)
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_uuid) REFERENCES branches (id) ON DELETE CASCADE
     );
 
 -- Create the PartnersPaymentReceipt
@@ -125,13 +125,13 @@ CREATE TABLE IF NOT EXISTS partner_payment_receipt
     record_type     TEXT CHECK (record_type IN ('debit', 'credit')),
     amount          DECIMAL(20, 2) NOT NULL,
     branch_uuid     uuid NOT NULL, -- changed
-    user_profile_id uuid NOT NULL,
+    user_profile_id uuid,
     comments        TEXT,
     organization_id uuid NOT NULL,
-    FOREIGN KEY (organization_id) REFERENCES organization (id),
-    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id),
-    FOREIGN KEY (partner_id) REFERENCES partners (partner_id),
-    FOREIGN KEY (branch_uuid) REFERENCES branches (id)
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE,
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id) ON DELETE SET NULL,
+    FOREIGN KEY (partner_id) REFERENCES partners (partner_id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_uuid) REFERENCES branches (id) ON DELETE CASCADE
     );
 
 -- Create the PurchaseGroup table
@@ -143,14 +143,14 @@ CREATE TABLE IF NOT EXISTS purchase_group
     purchase_date     TIMESTAMP NOT NULL DEFAULT NOW(),
     payment_method    TEXT CHECK (payment_method IN ('cash', 'bank', 'credit')),
     branch_uuid       uuid NOT NULL,
-    user_profile_id   uuid NOT NULL,
+    user_profile_id   uuid,
     comments          TEXT,
     partner_id        uuid,
     organization_id   uuid NOT NULL,
-    FOREIGN KEY (branch_uuid) REFERENCES branches (id),
-    FOREIGN KEY (organization_id) REFERENCES organization (id),
-    FOREIGN KEY (partner_id) REFERENCES partners (partner_id),
-    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id)
+    FOREIGN KEY (branch_uuid) REFERENCES branches (id) ON DELETE CASCADE,
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE,
+    FOREIGN KEY (partner_id) REFERENCES partners (partner_id) ON DELETE SET NULL,
+    FOREIGN KEY (user_profile_id) REFERENCES user_profile (id) ON DELETE SET NULL
     );
 
 -- Create the ProductPurchaseTable
@@ -164,10 +164,10 @@ CREATE TABLE IF NOT EXISTS purchases
     units               DECIMAL(20, 2) NOT NULL,
     branch_uuid         uuid NOT NULL,
     organization_id     uuid NOT NULL,
-    FOREIGN KEY (organization_id) REFERENCES organization (id),
-    FOREIGN KEY (product_id) REFERENCES products (product_id),
-    FOREIGN KEY (purchase_group_id) REFERENCES purchase_group (purchase_group_id),
-    FOREIGN KEY (branch_uuid) REFERENCES branches (id)
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products (product_id) ON DELETE SET NULL,
+    FOREIGN KEY (purchase_group_id) REFERENCES purchase_group (purchase_group_id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_uuid) REFERENCES branches (id) ON DELETE CASCADE
     );
 
 -- Create enum type for operation
@@ -186,7 +186,7 @@ CREATE TABLE activity
     status          BOOLEAN NOT NULL,
     time            TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     organization_id uuid NOT NULL,
-    FOREIGN KEY (organization_id) REFERENCES organization (id)
+    FOREIGN KEY (organization_id) REFERENCES organization (id) ON DELETE CASCADE
 );
 
 -- Create table configurations
