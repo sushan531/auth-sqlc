@@ -7,9 +7,60 @@ package generated
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
+
+const createBranchAndUpdateUserAccess = `-- name: CreateBranchAndUpdateUserAccess :one
+
+WITH new_branch AS (
+    INSERT INTO branches (unique_name, branch_name, organization_id)
+    VALUES ($1, $2, $3)
+    RETURNING id, unique_name, branch_name, organization_id
+),
+update_user_branches AS (
+    UPDATE user_organization_branches
+    SET branch_uuids = array_append(branch_uuids, (SELECT id FROM new_branch))
+    WHERE user_profile_id = $4 AND organization_id = $3
+    RETURNING user_profile_id, organization_id, branch_uuids
+)
+SELECT nb.id, nb.unique_name, nb.branch_name, nb.organization_id
+FROM new_branch nb
+`
+
+type CreateBranchAndUpdateUserAccessParams struct {
+	UniqueName     string    `json:"unique_name"`
+	BranchName     string    `json:"branch_name"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	UserProfileID  uuid.UUID `json:"user_profile_id"`
+}
+
+type CreateBranchAndUpdateUserAccessRow struct {
+	ID             uuid.UUID `json:"id"`
+	UniqueName     string    `json:"unique_name"`
+	BranchName     string    `json:"branch_name"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+}
+
+// Branch Operations
+func (q *Queries) CreateBranchAndUpdateUserAccess(ctx context.Context, arg CreateBranchAndUpdateUserAccessParams) (CreateBranchAndUpdateUserAccessRow, error) {
+	row := q.db.QueryRowContext(ctx, createBranchAndUpdateUserAccess,
+		arg.UniqueName,
+		arg.BranchName,
+		arg.OrganizationID,
+		arg.UserProfileID,
+	)
+	var i CreateBranchAndUpdateUserAccessRow
+	err := row.Scan(
+		&i.ID,
+		&i.UniqueName,
+		&i.BranchName,
+		&i.OrganizationID,
+	)
+	return i, err
+}
 
 const createOrganization = `-- name: CreateOrganization :one
 
@@ -59,6 +110,16 @@ func (q *Queries) CreateOrganizationWithUser(ctx context.Context, arg CreateOrga
 	return i, err
 }
 
+const deleteBranch = `-- name: DeleteBranch :exec
+DELETE FROM branches
+WHERE id = $1
+`
+
+func (q *Queries) DeleteBranch(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteBranch, id)
+	return err
+}
+
 const deleteOrganization = `-- name: DeleteOrganization :exec
 DELETE FROM organization
 WHERE id = $1
@@ -67,6 +128,201 @@ WHERE id = $1
 func (q *Queries) DeleteOrganization(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteOrganization, id)
 	return err
+}
+
+const getAllBranchesForOrganization = `-- name: GetAllBranchesForOrganization :many
+SELECT id, unique_name, branch_name, organization_id
+FROM branches
+WHERE organization_id = $1
+ORDER BY branch_name
+`
+
+func (q *Queries) GetAllBranchesForOrganization(ctx context.Context, organizationID uuid.UUID) ([]Branch, error) {
+	rows, err := q.db.QueryContext(ctx, getAllBranchesForOrganization, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Branch
+	for rows.Next() {
+		var i Branch
+		if err := rows.Scan(
+			&i.ID,
+			&i.UniqueName,
+			&i.BranchName,
+			&i.OrganizationID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getBranchById = `-- name: GetBranchById :one
+SELECT id, unique_name, branch_name, organization_id
+FROM branches
+WHERE id = $1
+`
+
+func (q *Queries) GetBranchById(ctx context.Context, id uuid.UUID) (Branch, error) {
+	row := q.db.QueryRowContext(ctx, getBranchById, id)
+	var i Branch
+	err := row.Scan(
+		&i.ID,
+		&i.UniqueName,
+		&i.BranchName,
+		&i.OrganizationID,
+	)
+	return i, err
+}
+
+const getUserOrganizationBranchDetailsByEmail = `-- name: GetUserOrganizationBranchDetailsByEmail :many
+SELECT 
+    up.id as user_profile_id,
+    up.full_name,
+    up.user_role,
+    a.user_email,
+    o.id as organization_id,
+    o.name as organization_name,
+    uob.branch_uuids,
+    COALESCE(
+        array_agg(
+            json_build_object(
+                'branch_id', b.id,
+                'unique_name', b.unique_name,
+                'branch_name', b.branch_name
+            )
+        ) FILTER (WHERE b.id IS NOT NULL),
+        '{}'::json[]
+    ) as branch_details
+FROM user_profile up
+INNER JOIN auth a ON up.id = a.user_profile_id
+INNER JOIN user_organization_branches uob ON up.id = uob.user_profile_id
+INNER JOIN organization o ON uob.organization_id = o.id
+LEFT JOIN branches b ON b.id = ANY(uob.branch_uuids) AND b.organization_id = o.id
+WHERE a.user_email = $1
+GROUP BY up.id, up.full_name, up.user_role, a.user_email, o.id, o.name, uob.branch_uuids
+`
+
+type GetUserOrganizationBranchDetailsByEmailRow struct {
+	UserProfileID    uuid.UUID      `json:"user_profile_id"`
+	FullName         string         `json:"full_name"`
+	UserRole         sql.NullString `json:"user_role"`
+	UserEmail        string         `json:"user_email"`
+	OrganizationID   uuid.UUID      `json:"organization_id"`
+	OrganizationName string         `json:"organization_name"`
+	BranchUuids      []uuid.UUID    `json:"branch_uuids"`
+	BranchDetails    interface{}    `json:"branch_details"`
+}
+
+func (q *Queries) GetUserOrganizationBranchDetailsByEmail(ctx context.Context, userEmail string) ([]GetUserOrganizationBranchDetailsByEmailRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserOrganizationBranchDetailsByEmail, userEmail)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserOrganizationBranchDetailsByEmailRow
+	for rows.Next() {
+		var i GetUserOrganizationBranchDetailsByEmailRow
+		if err := rows.Scan(
+			&i.UserProfileID,
+			&i.FullName,
+			&i.UserRole,
+			&i.UserEmail,
+			&i.OrganizationID,
+			&i.OrganizationName,
+			pq.Array(&i.BranchUuids),
+			&i.BranchDetails,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserOrganizationBranchDetailsById = `-- name: GetUserOrganizationBranchDetailsById :many
+SELECT
+    up.id as user_profile_id,
+    up.full_name,
+    up.user_role,
+    a.user_email,
+    o.id as organization_id,
+    o.name as organization_name,
+    uob.branch_uuids,
+    COALESCE(
+        array_agg(
+            json_build_object(
+                'branch_id', b.id,
+                'unique_name', b.unique_name,
+                'branch_name', b.branch_name
+            )
+        ) FILTER (WHERE b.id IS NOT NULL),
+        '{}'::json[]
+    ) as branch_details
+FROM user_profile up
+INNER JOIN auth a ON up.id = a.user_profile_id
+INNER JOIN user_organization_branches uob ON up.id = uob.user_profile_id
+INNER JOIN organization o ON uob.organization_id = o.id
+LEFT JOIN branches b ON b.id = ANY(uob.branch_uuids) AND b.organization_id = o.id
+WHERE up.id = $1
+GROUP BY up.id, up.full_name, up.user_role, a.user_email, o.id, o.name, uob.branch_uuids
+`
+
+type GetUserOrganizationBranchDetailsByIdRow struct {
+	UserProfileID    uuid.UUID      `json:"user_profile_id"`
+	FullName         string         `json:"full_name"`
+	UserRole         sql.NullString `json:"user_role"`
+	UserEmail        string         `json:"user_email"`
+	OrganizationID   uuid.UUID      `json:"organization_id"`
+	OrganizationName string         `json:"organization_name"`
+	BranchUuids      []uuid.UUID    `json:"branch_uuids"`
+	BranchDetails    interface{}    `json:"branch_details"`
+}
+
+func (q *Queries) GetUserOrganizationBranchDetailsById(ctx context.Context, id uuid.UUID) ([]GetUserOrganizationBranchDetailsByIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserOrganizationBranchDetailsById, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserOrganizationBranchDetailsByIdRow
+	for rows.Next() {
+		var i GetUserOrganizationBranchDetailsByIdRow
+		if err := rows.Scan(
+			&i.UserProfileID,
+			&i.FullName,
+			&i.UserRole,
+			&i.UserEmail,
+			&i.OrganizationID,
+			&i.OrganizationName,
+			pq.Array(&i.BranchUuids),
+			&i.BranchDetails,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const organizationExists = `-- name: OrganizationExists :one
@@ -93,6 +349,69 @@ func (q *Queries) OrganizationNameExists(ctx context.Context, name string) (bool
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const removeBranchFromUserAccess = `-- name: RemoveBranchFromUserAccess :exec
+UPDATE user_organization_branches
+SET branch_uuids = array_remove(branch_uuids, $1)
+WHERE user_profile_id = $2 AND organization_id = $3
+`
+
+type RemoveBranchFromUserAccessParams struct {
+	ArrayRemove    interface{} `json:"array_remove"`
+	UserProfileID  uuid.UUID   `json:"user_profile_id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+}
+
+func (q *Queries) RemoveBranchFromUserAccess(ctx context.Context, arg RemoveBranchFromUserAccessParams) error {
+	_, err := q.db.ExecContext(ctx, removeBranchFromUserAccess, arg.ArrayRemove, arg.UserProfileID, arg.OrganizationID)
+	return err
+}
+
+const removeBranchFromUserAccessAndDelete = `-- name: RemoveBranchFromUserAccessAndDelete :exec
+WITH remove_from_users AS (
+    UPDATE user_organization_branches
+    SET branch_uuids = array_remove(branch_uuids, $1)
+    WHERE user_organization_branches.organization_id = $2
+    RETURNING user_organization_branches.organization_id
+)
+DELETE FROM branches
+WHERE branches.id = $1
+`
+
+type RemoveBranchFromUserAccessAndDeleteParams struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+}
+
+func (q *Queries) RemoveBranchFromUserAccessAndDelete(ctx context.Context, arg RemoveBranchFromUserAccessAndDeleteParams) error {
+	_, err := q.db.ExecContext(ctx, removeBranchFromUserAccessAndDelete, arg.ID, arg.OrganizationID)
+	return err
+}
+
+const updateBranch = `-- name: UpdateBranch :one
+UPDATE branches
+SET unique_name = $2, branch_name = $3
+WHERE id = $1
+RETURNING id, unique_name, branch_name, organization_id
+`
+
+type UpdateBranchParams struct {
+	ID         uuid.UUID `json:"id"`
+	UniqueName string    `json:"unique_name"`
+	BranchName string    `json:"branch_name"`
+}
+
+func (q *Queries) UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Branch, error) {
+	row := q.db.QueryRowContext(ctx, updateBranch, arg.ID, arg.UniqueName, arg.BranchName)
+	var i Branch
+	err := row.Scan(
+		&i.ID,
+		&i.UniqueName,
+		&i.BranchName,
+		&i.OrganizationID,
+	)
+	return i, err
 }
 
 const updateOrganization = `-- name: UpdateOrganization :one
