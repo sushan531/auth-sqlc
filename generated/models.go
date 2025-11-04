@@ -8,6 +8,7 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type Auth struct {
@@ -26,9 +27,32 @@ type Branch struct {
 	OrganizationID uuid.UUID `json:"organization_id"`
 }
 
+type Category struct {
+	ID          uuid.UUID      `json:"id"`
+	Name        string         `json:"name"`
+	Description sql.NullString `json:"description"`
+}
+
 type Organization struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
+}
+
+type Product struct {
+	ID                uuid.UUID       `json:"id"`
+	Name              string          `json:"name"`
+	Description       sql.NullString  `json:"description"`
+	CategoryID        uuid.UUID       `json:"category_id"`
+	CostPrice         decimal.Decimal `json:"cost_price"`
+	SellingPrice      decimal.Decimal `json:"selling_price"`
+	QuantityInStock   int32           `json:"quantity_in_stock"`
+	ReorderLevel      int32           `json:"reorder_level"`
+	UnitOfMeasure     string          `json:"unit_of_measure"`
+	SubUnitOfMeasure  sql.NullString  `json:"sub_unit_of_measure"`
+	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
+	IsActive          sql.NullBool    `json:"is_active"`
+	ImageUrl          sql.NullString  `json:"image_url"`
+	UpdatedAt         sql.NullTime    `json:"updated_at"`
 }
 
 type UserOrganizationBranch struct {
