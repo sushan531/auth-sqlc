@@ -77,7 +77,7 @@ WITH remove_from_users AS (
 DELETE FROM branches
 WHERE branches.id = $1;
 
--- name: GetUserOrganizationBranchDetailsById :many
+-- name: GetUserOrganizationBranchDetailsById :one
 SELECT
     up.id as user_profile_id,
     up.full_name,
@@ -102,9 +102,10 @@ INNER JOIN user_organization_branches uob ON up.id = uob.user_profile_id
 INNER JOIN organization o ON uob.organization_id = o.id
 LEFT JOIN branches b ON b.id = ANY(uob.branch_uuids) AND b.organization_id = o.id
 WHERE up.id = $1
-GROUP BY up.id, up.full_name, up.user_role, a.user_email, o.id, o.name, uob.branch_uuids;
+GROUP BY up.id, up.full_name, up.user_role, a.user_email, o.id, o.name, uob.branch_uuids
+LIMIT 1;
 
--- name: GetUserOrganizationBranchDetailsByEmail :many
+-- name: GetUserOrganizationBranchDetailsByEmail :one
 SELECT 
     up.id as user_profile_id,
     up.full_name,
@@ -129,7 +130,8 @@ INNER JOIN user_organization_branches uob ON up.id = uob.user_profile_id
 INNER JOIN organization o ON uob.organization_id = o.id
 LEFT JOIN branches b ON b.id = ANY(uob.branch_uuids) AND b.organization_id = o.id
 WHERE a.user_email = $1
-GROUP BY up.id, up.full_name, up.user_role, a.user_email, o.id, o.name, uob.branch_uuids;
+GROUP BY up.id, up.full_name, up.user_role, a.user_email, o.id, o.name, uob.branch_uuids
+LIMIT 1;
 
 -- name: GetAllBranchesForOrganization :many
 SELECT id, unique_name, branch_name, organization_id

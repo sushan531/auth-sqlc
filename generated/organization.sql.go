@@ -183,7 +183,7 @@ func (q *Queries) GetBranchById(ctx context.Context, id uuid.UUID) (Branch, erro
 	return i, err
 }
 
-const getUserOrganizationBranchDetailsByEmail = `-- name: GetUserOrganizationBranchDetailsByEmail :many
+const getUserOrganizationBranchDetailsByEmail = `-- name: GetUserOrganizationBranchDetailsByEmail :one
 SELECT 
     up.id as user_profile_id,
     up.full_name,
@@ -209,6 +209,7 @@ INNER JOIN organization o ON uob.organization_id = o.id
 LEFT JOIN branches b ON b.id = ANY(uob.branch_uuids) AND b.organization_id = o.id
 WHERE a.user_email = $1
 GROUP BY up.id, up.full_name, up.user_role, a.user_email, o.id, o.name, uob.branch_uuids
+LIMIT 1
 `
 
 type GetUserOrganizationBranchDetailsByEmailRow struct {
@@ -222,39 +223,23 @@ type GetUserOrganizationBranchDetailsByEmailRow struct {
 	BranchDetails    interface{}    `json:"branch_details"`
 }
 
-func (q *Queries) GetUserOrganizationBranchDetailsByEmail(ctx context.Context, userEmail string) ([]GetUserOrganizationBranchDetailsByEmailRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserOrganizationBranchDetailsByEmail, userEmail)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetUserOrganizationBranchDetailsByEmailRow
-	for rows.Next() {
-		var i GetUserOrganizationBranchDetailsByEmailRow
-		if err := rows.Scan(
-			&i.UserProfileID,
-			&i.FullName,
-			&i.UserRole,
-			&i.UserEmail,
-			&i.OrganizationID,
-			&i.OrganizationName,
-			pq.Array(&i.BranchUuids),
-			&i.BranchDetails,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetUserOrganizationBranchDetailsByEmail(ctx context.Context, userEmail string) (GetUserOrganizationBranchDetailsByEmailRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserOrganizationBranchDetailsByEmail, userEmail)
+	var i GetUserOrganizationBranchDetailsByEmailRow
+	err := row.Scan(
+		&i.UserProfileID,
+		&i.FullName,
+		&i.UserRole,
+		&i.UserEmail,
+		&i.OrganizationID,
+		&i.OrganizationName,
+		pq.Array(&i.BranchUuids),
+		&i.BranchDetails,
+	)
+	return i, err
 }
 
-const getUserOrganizationBranchDetailsById = `-- name: GetUserOrganizationBranchDetailsById :many
+const getUserOrganizationBranchDetailsById = `-- name: GetUserOrganizationBranchDetailsById :one
 SELECT
     up.id as user_profile_id,
     up.full_name,
@@ -280,6 +265,7 @@ INNER JOIN organization o ON uob.organization_id = o.id
 LEFT JOIN branches b ON b.id = ANY(uob.branch_uuids) AND b.organization_id = o.id
 WHERE up.id = $1
 GROUP BY up.id, up.full_name, up.user_role, a.user_email, o.id, o.name, uob.branch_uuids
+LIMIT 1
 `
 
 type GetUserOrganizationBranchDetailsByIdRow struct {
@@ -293,36 +279,20 @@ type GetUserOrganizationBranchDetailsByIdRow struct {
 	BranchDetails    interface{}    `json:"branch_details"`
 }
 
-func (q *Queries) GetUserOrganizationBranchDetailsById(ctx context.Context, id uuid.UUID) ([]GetUserOrganizationBranchDetailsByIdRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserOrganizationBranchDetailsById, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetUserOrganizationBranchDetailsByIdRow
-	for rows.Next() {
-		var i GetUserOrganizationBranchDetailsByIdRow
-		if err := rows.Scan(
-			&i.UserProfileID,
-			&i.FullName,
-			&i.UserRole,
-			&i.UserEmail,
-			&i.OrganizationID,
-			&i.OrganizationName,
-			pq.Array(&i.BranchUuids),
-			&i.BranchDetails,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetUserOrganizationBranchDetailsById(ctx context.Context, id uuid.UUID) (GetUserOrganizationBranchDetailsByIdRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserOrganizationBranchDetailsById, id)
+	var i GetUserOrganizationBranchDetailsByIdRow
+	err := row.Scan(
+		&i.UserProfileID,
+		&i.FullName,
+		&i.UserRole,
+		&i.UserEmail,
+		&i.OrganizationID,
+		&i.OrganizationName,
+		pq.Array(&i.BranchUuids),
+		&i.BranchDetails,
+	)
+	return i, err
 }
 
 const organizationExists = `-- name: OrganizationExists :one

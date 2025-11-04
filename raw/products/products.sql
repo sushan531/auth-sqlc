@@ -1,6 +1,6 @@
 -- name: InsertCategory :one
-INSERT INTO category (name, description)
-VALUES ($1, $2)
+INSERT INTO category (name, description, organization_id)
+VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: GetCategory :one
@@ -9,15 +9,18 @@ WHERE id = $1;
 
 -- name: GetCategoryByName :one
 SELECT * FROM category
-WHERE name = $1;
+WHERE name = $1 AND organization_id = $2;
 
 -- name: ListCategories :many
 SELECT * FROM category
+WHERE organization_id = $1
 ORDER BY name;
 
 -- name: UpdateCategory :one
 UPDATE category
-SET name = $2, description = $3
+SET name = COALESCE($2, name), 
+    description = COALESCE($3, description),
+    updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
@@ -29,9 +32,10 @@ WHERE id = $1;
 INSERT INTO product (
     name, description, category_id, cost_price, selling_price,
     quantity_in_stock, reorder_level, unit_of_measure,
-    sub_unit_of_measure, sub_unit_conversion, is_active, image_url
+    sub_unit_of_measure, sub_unit_conversion, is_active, image_url,
+    organization_id, branch_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 RETURNING *;
 
 -- name: GetProduct :one
@@ -44,47 +48,44 @@ WHERE p.id = $1;
 SELECT p.*, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE p.name = $1;
+WHERE p.name = $1 AND p.branch_id = $2;
 
 -- name: ListProducts :many
 SELECT p.*, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE p.is_active = true
+WHERE p.branch_id = $1 AND p.is_active = true
 ORDER BY p.name;
 
 -- name: ListProductsByCategory :many
 SELECT p.*, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE p.category_id = $1 AND p.is_active = true
+WHERE p.category_id = $1 AND p.branch_id = $2 AND p.is_active = true
 ORDER BY p.name;
 
 -- name: ListLowStockProducts :many
 SELECT p.*, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE p.quantity_in_stock <= p.reorder_level AND p.is_active = true
+WHERE p.branch_id = $1 AND p.quantity_in_stock <= p.reorder_level AND p.is_active = true
 ORDER BY p.quantity_in_stock ASC;
 
 -- name: UpdateProduct :one
 UPDATE product
-SET name = $2, description = $3, category_id = $4, cost_price = $5,
-    selling_price = $6, quantity_in_stock = $7, reorder_level = $8,
-    unit_of_measure = $9, sub_unit_of_measure = $10, sub_unit_conversion = $11,
-    is_active = $12, image_url = $13, updated_at = NOW()
-WHERE id = $1
-RETURNING *;
-
--- name: UpdateProductStock :one
-UPDATE product
-SET quantity_in_stock = $2, updated_at = NOW()
-WHERE id = $1
-RETURNING *;
-
--- name: UpdateProductPrices :one
-UPDATE product
-SET cost_price = $2, selling_price = $3, updated_at = NOW()
+SET name = COALESCE($2, name), 
+    description = COALESCE($3, description), 
+    category_id = COALESCE($4, category_id), 
+    cost_price = COALESCE($5, cost_price),
+    selling_price = COALESCE($6, selling_price), 
+    quantity_in_stock = COALESCE($7, quantity_in_stock), 
+    reorder_level = COALESCE($8, reorder_level),
+    unit_of_measure = COALESCE($9, unit_of_measure), 
+    sub_unit_of_measure = COALESCE($10, sub_unit_of_measure), 
+    sub_unit_conversion = COALESCE($11, sub_unit_conversion),
+    is_active = COALESCE($12, is_active), 
+    image_url = COALESCE($13, image_url), 
+    updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
@@ -108,10 +109,43 @@ WHERE id = $1;
 SELECT p.*, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE (p.name ILIKE '%' || $1 || '%' OR p.description ILIKE '%' || $1 || '%')
+WHERE p.branch_id = $2 
+  AND (p.name ILIKE '%' || $1 || '%' OR p.description ILIKE '%' || $1 || '%')
   AND p.is_active = true
 ORDER BY p.name;
 
 -- name: CountProductsByCategory :one
 SELECT COUNT(*) FROM product
-WHERE category_id = $1 AND is_active = true;
+WHERE category_id = $1 AND branch_id = $2 AND is_active = true;
+
+-- name: ListProductsByOrganization :many
+SELECT p.*, c.name as category_name, b.branch_name
+FROM product p
+JOIN category c ON p.category_id = c.id
+JOIN branches b ON p.branch_id = b.id
+WHERE p.organization_id = $1 AND p.is_active = true
+ORDER BY b.branch_name, p.name;
+
+-- name: ListCategoriesByOrganization :many
+SELECT * FROM category
+WHERE organization_id = $1
+ORDER BY name;
+
+-- name: GetProductsByUserBranches :many
+SELECT p.*, c.name as category_name, b.branch_name
+FROM product p
+JOIN category c ON p.category_id = c.id
+JOIN branches b ON p.branch_id = b.id
+JOIN user_organization_branches uob ON p.organization_id = uob.organization_id
+WHERE uob.user_profile_id = $1 
+  AND p.branch_id = ANY(uob.branch_uuids)
+  AND p.is_active = true
+ORDER BY b.branch_name, p.name;
+
+-- name: CountProductsByBranch :one
+SELECT COUNT(*) FROM product
+WHERE branch_id = $1 AND is_active = true;
+
+-- name: CountCategoriesByOrganization :one
+SELECT COUNT(*) FROM category
+WHERE organization_id = $1;

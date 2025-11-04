@@ -28,9 +28,11 @@ type Branch struct {
 }
 
 type Category struct {
-	ID          uuid.UUID      `json:"id"`
-	Name        string         `json:"name"`
-	Description sql.NullString `json:"description"`
+	ID             uuid.UUID      `json:"id"`
+	Name           string         `json:"name"`
+	Description    sql.NullString `json:"description"`
+	OrganizationID uuid.UUID      `json:"organization_id"`
+	UpdatedAt      sql.NullTime   `json:"updated_at"`
 }
 
 type Organization struct {
@@ -52,6 +54,8 @@ type Product struct {
 	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
 	IsActive          sql.NullBool    `json:"is_active"`
 	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
 	UpdatedAt         sql.NullTime    `json:"updated_at"`
 }
 

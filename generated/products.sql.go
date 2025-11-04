@@ -17,7 +17,7 @@ const activateProduct = `-- name: ActivateProduct :one
 UPDATE product
 SET is_active = true, updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, updated_at
+RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, organization_id, branch_id, updated_at
 `
 
 func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -37,18 +37,49 @@ func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, e
 		&i.SubUnitConversion,
 		&i.IsActive,
 		&i.ImageUrl,
+		&i.OrganizationID,
+		&i.BranchID,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const countProductsByCategory = `-- name: CountProductsByCategory :one
-SELECT COUNT(*) FROM product
-WHERE category_id = $1 AND is_active = true
+const countCategoriesByOrganization = `-- name: CountCategoriesByOrganization :one
+SELECT COUNT(*) FROM category
+WHERE organization_id = $1
 `
 
-func (q *Queries) CountProductsByCategory(ctx context.Context, categoryID uuid.UUID) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countProductsByCategory, categoryID)
+func (q *Queries) CountCategoriesByOrganization(ctx context.Context, organizationID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCategoriesByOrganization, organizationID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countProductsByBranch = `-- name: CountProductsByBranch :one
+SELECT COUNT(*) FROM product
+WHERE branch_id = $1 AND is_active = true
+`
+
+func (q *Queries) CountProductsByBranch(ctx context.Context, branchID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countProductsByBranch, branchID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countProductsByCategory = `-- name: CountProductsByCategory :one
+SELECT COUNT(*) FROM product
+WHERE category_id = $1 AND branch_id = $2 AND is_active = true
+`
+
+type CountProductsByCategoryParams struct {
+	CategoryID uuid.UUID `json:"category_id"`
+	BranchID   uuid.UUID `json:"branch_id"`
+}
+
+func (q *Queries) CountProductsByCategory(ctx context.Context, arg CountProductsByCategoryParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countProductsByCategory, arg.CategoryID, arg.BranchID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -58,7 +89,7 @@ const deactivateProduct = `-- name: DeactivateProduct :one
 UPDATE product
 SET is_active = false, updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, updated_at
+RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, organization_id, branch_id, updated_at
 `
 
 func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product, error) {
@@ -78,6 +109,8 @@ func (q *Queries) DeactivateProduct(ctx context.Context, id uuid.UUID) (Product,
 		&i.SubUnitConversion,
 		&i.IsActive,
 		&i.ImageUrl,
+		&i.OrganizationID,
+		&i.BranchID,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -104,31 +137,48 @@ func (q *Queries) DeleteProduct(ctx context.Context, id uuid.UUID) error {
 }
 
 const getCategory = `-- name: GetCategory :one
-SELECT id, name, description FROM category
+SELECT id, name, description, organization_id, updated_at FROM category
 WHERE id = $1
 `
 
 func (q *Queries) GetCategory(ctx context.Context, id uuid.UUID) (Category, error) {
 	row := q.db.QueryRowContext(ctx, getCategory, id)
 	var i Category
-	err := row.Scan(&i.ID, &i.Name, &i.Description)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.OrganizationID,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
 const getCategoryByName = `-- name: GetCategoryByName :one
-SELECT id, name, description FROM category
-WHERE name = $1
+SELECT id, name, description, organization_id, updated_at FROM category
+WHERE name = $1 AND organization_id = $2
 `
 
-func (q *Queries) GetCategoryByName(ctx context.Context, name string) (Category, error) {
-	row := q.db.QueryRowContext(ctx, getCategoryByName, name)
+type GetCategoryByNameParams struct {
+	Name           string    `json:"name"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+}
+
+func (q *Queries) GetCategoryByName(ctx context.Context, arg GetCategoryByNameParams) (Category, error) {
+	row := q.db.QueryRowContext(ctx, getCategoryByName, arg.Name, arg.OrganizationID)
 	var i Category
-	err := row.Scan(&i.ID, &i.Name, &i.Description)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.OrganizationID,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
 const getProduct = `-- name: GetProduct :one
-SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.updated_at, c.name as category_name
+SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.organization_id, p.branch_id, p.updated_at, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
 WHERE p.id = $1
@@ -148,6 +198,8 @@ type GetProductRow struct {
 	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
 	IsActive          sql.NullBool    `json:"is_active"`
 	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
 	UpdatedAt         sql.NullTime    `json:"updated_at"`
 	CategoryName      string          `json:"category_name"`
 }
@@ -169,6 +221,8 @@ func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (GetProductRow, 
 		&i.SubUnitConversion,
 		&i.IsActive,
 		&i.ImageUrl,
+		&i.OrganizationID,
+		&i.BranchID,
 		&i.UpdatedAt,
 		&i.CategoryName,
 	)
@@ -176,11 +230,16 @@ func (q *Queries) GetProduct(ctx context.Context, id uuid.UUID) (GetProductRow, 
 }
 
 const getProductByName = `-- name: GetProductByName :one
-SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.updated_at, c.name as category_name
+SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.organization_id, p.branch_id, p.updated_at, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE p.name = $1
+WHERE p.name = $1 AND p.branch_id = $2
 `
+
+type GetProductByNameParams struct {
+	Name     string    `json:"name"`
+	BranchID uuid.UUID `json:"branch_id"`
+}
 
 type GetProductByNameRow struct {
 	ID                uuid.UUID       `json:"id"`
@@ -196,12 +255,14 @@ type GetProductByNameRow struct {
 	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
 	IsActive          sql.NullBool    `json:"is_active"`
 	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
 	UpdatedAt         sql.NullTime    `json:"updated_at"`
 	CategoryName      string          `json:"category_name"`
 }
 
-func (q *Queries) GetProductByName(ctx context.Context, name string) (GetProductByNameRow, error) {
-	row := q.db.QueryRowContext(ctx, getProductByName, name)
+func (q *Queries) GetProductByName(ctx context.Context, arg GetProductByNameParams) (GetProductByNameRow, error) {
+	row := q.db.QueryRowContext(ctx, getProductByName, arg.Name, arg.BranchID)
 	var i GetProductByNameRow
 	err := row.Scan(
 		&i.ID,
@@ -217,27 +278,111 @@ func (q *Queries) GetProductByName(ctx context.Context, name string) (GetProduct
 		&i.SubUnitConversion,
 		&i.IsActive,
 		&i.ImageUrl,
+		&i.OrganizationID,
+		&i.BranchID,
 		&i.UpdatedAt,
 		&i.CategoryName,
 	)
 	return i, err
 }
 
+const getProductsByUserBranches = `-- name: GetProductsByUserBranches :many
+SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.organization_id, p.branch_id, p.updated_at, c.name as category_name, b.branch_name
+FROM product p
+JOIN category c ON p.category_id = c.id
+JOIN branches b ON p.branch_id = b.id
+JOIN user_organization_branches uob ON p.organization_id = uob.organization_id
+WHERE uob.user_profile_id = $1 
+  AND p.branch_id = ANY(uob.branch_uuids)
+  AND p.is_active = true
+ORDER BY b.branch_name, p.name
+`
+
+type GetProductsByUserBranchesRow struct {
+	ID                uuid.UUID       `json:"id"`
+	Name              string          `json:"name"`
+	Description       sql.NullString  `json:"description"`
+	CategoryID        uuid.UUID       `json:"category_id"`
+	CostPrice         decimal.Decimal `json:"cost_price"`
+	SellingPrice      decimal.Decimal `json:"selling_price"`
+	QuantityInStock   int32           `json:"quantity_in_stock"`
+	ReorderLevel      int32           `json:"reorder_level"`
+	UnitOfMeasure     string          `json:"unit_of_measure"`
+	SubUnitOfMeasure  sql.NullString  `json:"sub_unit_of_measure"`
+	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
+	IsActive          sql.NullBool    `json:"is_active"`
+	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
+	UpdatedAt         sql.NullTime    `json:"updated_at"`
+	CategoryName      string          `json:"category_name"`
+	BranchName        string          `json:"branch_name"`
+}
+
+func (q *Queries) GetProductsByUserBranches(ctx context.Context, userProfileID uuid.UUID) ([]GetProductsByUserBranchesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getProductsByUserBranches, userProfileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetProductsByUserBranchesRow
+	for rows.Next() {
+		var i GetProductsByUserBranchesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.CategoryID,
+			&i.CostPrice,
+			&i.SellingPrice,
+			&i.QuantityInStock,
+			&i.ReorderLevel,
+			&i.UnitOfMeasure,
+			&i.SubUnitOfMeasure,
+			&i.SubUnitConversion,
+			&i.IsActive,
+			&i.ImageUrl,
+			&i.OrganizationID,
+			&i.BranchID,
+			&i.UpdatedAt,
+			&i.CategoryName,
+			&i.BranchName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertCategory = `-- name: InsertCategory :one
-INSERT INTO category (name, description)
-VALUES ($1, $2)
-RETURNING id, name, description
+INSERT INTO category (name, description, organization_id)
+VALUES ($1, $2, $3)
+RETURNING id, name, description, organization_id, updated_at
 `
 
 type InsertCategoryParams struct {
-	Name        string         `json:"name"`
-	Description sql.NullString `json:"description"`
+	Name           string         `json:"name"`
+	Description    sql.NullString `json:"description"`
+	OrganizationID uuid.UUID      `json:"organization_id"`
 }
 
 func (q *Queries) InsertCategory(ctx context.Context, arg InsertCategoryParams) (Category, error) {
-	row := q.db.QueryRowContext(ctx, insertCategory, arg.Name, arg.Description)
+	row := q.db.QueryRowContext(ctx, insertCategory, arg.Name, arg.Description, arg.OrganizationID)
 	var i Category
-	err := row.Scan(&i.ID, &i.Name, &i.Description)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.OrganizationID,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
@@ -245,10 +390,11 @@ const insertProduct = `-- name: InsertProduct :one
 INSERT INTO product (
     name, description, category_id, cost_price, selling_price,
     quantity_in_stock, reorder_level, unit_of_measure,
-    sub_unit_of_measure, sub_unit_conversion, is_active, image_url
+    sub_unit_of_measure, sub_unit_conversion, is_active, image_url,
+    organization_id, branch_id
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, updated_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, organization_id, branch_id, updated_at
 `
 
 type InsertProductParams struct {
@@ -264,6 +410,8 @@ type InsertProductParams struct {
 	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
 	IsActive          sql.NullBool    `json:"is_active"`
 	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
 }
 
 func (q *Queries) InsertProduct(ctx context.Context, arg InsertProductParams) (Product, error) {
@@ -280,6 +428,8 @@ func (q *Queries) InsertProduct(ctx context.Context, arg InsertProductParams) (P
 		arg.SubUnitConversion,
 		arg.IsActive,
 		arg.ImageUrl,
+		arg.OrganizationID,
+		arg.BranchID,
 	)
 	var i Product
 	err := row.Scan(
@@ -296,18 +446,21 @@ func (q *Queries) InsertProduct(ctx context.Context, arg InsertProductParams) (P
 		&i.SubUnitConversion,
 		&i.IsActive,
 		&i.ImageUrl,
+		&i.OrganizationID,
+		&i.BranchID,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const listCategories = `-- name: ListCategories :many
-SELECT id, name, description FROM category
+SELECT id, name, description, organization_id, updated_at FROM category
+WHERE organization_id = $1
 ORDER BY name
 `
 
-func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
-	rows, err := q.db.QueryContext(ctx, listCategories)
+func (q *Queries) ListCategories(ctx context.Context, organizationID uuid.UUID) ([]Category, error) {
+	rows, err := q.db.QueryContext(ctx, listCategories, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +468,48 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 	var items []Category
 	for rows.Next() {
 		var i Category
-		if err := rows.Scan(&i.ID, &i.Name, &i.Description); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.OrganizationID,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCategoriesByOrganization = `-- name: ListCategoriesByOrganization :many
+SELECT id, name, description, organization_id, updated_at FROM category
+WHERE organization_id = $1
+ORDER BY name
+`
+
+func (q *Queries) ListCategoriesByOrganization(ctx context.Context, organizationID uuid.UUID) ([]Category, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoriesByOrganization, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Category
+	for rows.Next() {
+		var i Category
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.OrganizationID,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -330,10 +524,10 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 }
 
 const listLowStockProducts = `-- name: ListLowStockProducts :many
-SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.updated_at, c.name as category_name
+SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.organization_id, p.branch_id, p.updated_at, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE p.quantity_in_stock <= p.reorder_level AND p.is_active = true
+WHERE p.branch_id = $1 AND p.quantity_in_stock <= p.reorder_level AND p.is_active = true
 ORDER BY p.quantity_in_stock ASC
 `
 
@@ -351,12 +545,14 @@ type ListLowStockProductsRow struct {
 	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
 	IsActive          sql.NullBool    `json:"is_active"`
 	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
 	UpdatedAt         sql.NullTime    `json:"updated_at"`
 	CategoryName      string          `json:"category_name"`
 }
 
-func (q *Queries) ListLowStockProducts(ctx context.Context) ([]ListLowStockProductsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listLowStockProducts)
+func (q *Queries) ListLowStockProducts(ctx context.Context, branchID uuid.UUID) ([]ListLowStockProductsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLowStockProducts, branchID)
 	if err != nil {
 		return nil, err
 	}
@@ -378,6 +574,8 @@ func (q *Queries) ListLowStockProducts(ctx context.Context) ([]ListLowStockProdu
 			&i.SubUnitConversion,
 			&i.IsActive,
 			&i.ImageUrl,
+			&i.OrganizationID,
+			&i.BranchID,
 			&i.UpdatedAt,
 			&i.CategoryName,
 		); err != nil {
@@ -395,10 +593,10 @@ func (q *Queries) ListLowStockProducts(ctx context.Context) ([]ListLowStockProdu
 }
 
 const listProducts = `-- name: ListProducts :many
-SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.updated_at, c.name as category_name
+SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.organization_id, p.branch_id, p.updated_at, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE p.is_active = true
+WHERE p.branch_id = $1 AND p.is_active = true
 ORDER BY p.name
 `
 
@@ -416,12 +614,14 @@ type ListProductsRow struct {
 	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
 	IsActive          sql.NullBool    `json:"is_active"`
 	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
 	UpdatedAt         sql.NullTime    `json:"updated_at"`
 	CategoryName      string          `json:"category_name"`
 }
 
-func (q *Queries) ListProducts(ctx context.Context) ([]ListProductsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listProducts)
+func (q *Queries) ListProducts(ctx context.Context, branchID uuid.UUID) ([]ListProductsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listProducts, branchID)
 	if err != nil {
 		return nil, err
 	}
@@ -443,6 +643,8 @@ func (q *Queries) ListProducts(ctx context.Context) ([]ListProductsRow, error) {
 			&i.SubUnitConversion,
 			&i.IsActive,
 			&i.ImageUrl,
+			&i.OrganizationID,
+			&i.BranchID,
 			&i.UpdatedAt,
 			&i.CategoryName,
 		); err != nil {
@@ -460,12 +662,17 @@ func (q *Queries) ListProducts(ctx context.Context) ([]ListProductsRow, error) {
 }
 
 const listProductsByCategory = `-- name: ListProductsByCategory :many
-SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.updated_at, c.name as category_name
+SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.organization_id, p.branch_id, p.updated_at, c.name as category_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE p.category_id = $1 AND p.is_active = true
+WHERE p.category_id = $1 AND p.branch_id = $2 AND p.is_active = true
 ORDER BY p.name
 `
+
+type ListProductsByCategoryParams struct {
+	CategoryID uuid.UUID `json:"category_id"`
+	BranchID   uuid.UUID `json:"branch_id"`
+}
 
 type ListProductsByCategoryRow struct {
 	ID                uuid.UUID       `json:"id"`
@@ -481,12 +688,14 @@ type ListProductsByCategoryRow struct {
 	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
 	IsActive          sql.NullBool    `json:"is_active"`
 	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
 	UpdatedAt         sql.NullTime    `json:"updated_at"`
 	CategoryName      string          `json:"category_name"`
 }
 
-func (q *Queries) ListProductsByCategory(ctx context.Context, categoryID uuid.UUID) ([]ListProductsByCategoryRow, error) {
-	rows, err := q.db.QueryContext(ctx, listProductsByCategory, categoryID)
+func (q *Queries) ListProductsByCategory(ctx context.Context, arg ListProductsByCategoryParams) ([]ListProductsByCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listProductsByCategory, arg.CategoryID, arg.BranchID)
 	if err != nil {
 		return nil, err
 	}
@@ -508,6 +717,8 @@ func (q *Queries) ListProductsByCategory(ctx context.Context, categoryID uuid.UU
 			&i.SubUnitConversion,
 			&i.IsActive,
 			&i.ImageUrl,
+			&i.OrganizationID,
+			&i.BranchID,
 			&i.UpdatedAt,
 			&i.CategoryName,
 		); err != nil {
@@ -524,14 +735,92 @@ func (q *Queries) ListProductsByCategory(ctx context.Context, categoryID uuid.UU
 	return items, nil
 }
 
-const searchProducts = `-- name: SearchProducts :many
-SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.updated_at, c.name as category_name
+const listProductsByOrganization = `-- name: ListProductsByOrganization :many
+SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.organization_id, p.branch_id, p.updated_at, c.name as category_name, b.branch_name
 FROM product p
 JOIN category c ON p.category_id = c.id
-WHERE (p.name ILIKE '%' || $1 || '%' OR p.description ILIKE '%' || $1 || '%')
+JOIN branches b ON p.branch_id = b.id
+WHERE p.organization_id = $1 AND p.is_active = true
+ORDER BY b.branch_name, p.name
+`
+
+type ListProductsByOrganizationRow struct {
+	ID                uuid.UUID       `json:"id"`
+	Name              string          `json:"name"`
+	Description       sql.NullString  `json:"description"`
+	CategoryID        uuid.UUID       `json:"category_id"`
+	CostPrice         decimal.Decimal `json:"cost_price"`
+	SellingPrice      decimal.Decimal `json:"selling_price"`
+	QuantityInStock   int32           `json:"quantity_in_stock"`
+	ReorderLevel      int32           `json:"reorder_level"`
+	UnitOfMeasure     string          `json:"unit_of_measure"`
+	SubUnitOfMeasure  sql.NullString  `json:"sub_unit_of_measure"`
+	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
+	IsActive          sql.NullBool    `json:"is_active"`
+	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
+	UpdatedAt         sql.NullTime    `json:"updated_at"`
+	CategoryName      string          `json:"category_name"`
+	BranchName        string          `json:"branch_name"`
+}
+
+func (q *Queries) ListProductsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListProductsByOrganizationRow, error) {
+	rows, err := q.db.QueryContext(ctx, listProductsByOrganization, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListProductsByOrganizationRow
+	for rows.Next() {
+		var i ListProductsByOrganizationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.CategoryID,
+			&i.CostPrice,
+			&i.SellingPrice,
+			&i.QuantityInStock,
+			&i.ReorderLevel,
+			&i.UnitOfMeasure,
+			&i.SubUnitOfMeasure,
+			&i.SubUnitConversion,
+			&i.IsActive,
+			&i.ImageUrl,
+			&i.OrganizationID,
+			&i.BranchID,
+			&i.UpdatedAt,
+			&i.CategoryName,
+			&i.BranchName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchProducts = `-- name: SearchProducts :many
+SELECT p.id, p.name, p.description, p.category_id, p.cost_price, p.selling_price, p.quantity_in_stock, p.reorder_level, p.unit_of_measure, p.sub_unit_of_measure, p.sub_unit_conversion, p.is_active, p.image_url, p.organization_id, p.branch_id, p.updated_at, c.name as category_name
+FROM product p
+JOIN category c ON p.category_id = c.id
+WHERE p.branch_id = $2 
+  AND (p.name ILIKE '%' || $1 || '%' OR p.description ILIKE '%' || $1 || '%')
   AND p.is_active = true
 ORDER BY p.name
 `
+
+type SearchProductsParams struct {
+	Column1  sql.NullString `json:"column_1"`
+	BranchID uuid.UUID      `json:"branch_id"`
+}
 
 type SearchProductsRow struct {
 	ID                uuid.UUID       `json:"id"`
@@ -547,12 +836,14 @@ type SearchProductsRow struct {
 	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
 	IsActive          sql.NullBool    `json:"is_active"`
 	ImageUrl          sql.NullString  `json:"image_url"`
+	OrganizationID    uuid.UUID       `json:"organization_id"`
+	BranchID          uuid.UUID       `json:"branch_id"`
 	UpdatedAt         sql.NullTime    `json:"updated_at"`
 	CategoryName      string          `json:"category_name"`
 }
 
-func (q *Queries) SearchProducts(ctx context.Context, dollar_1 sql.NullString) ([]SearchProductsRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchProducts, dollar_1)
+func (q *Queries) SearchProducts(ctx context.Context, arg SearchProductsParams) ([]SearchProductsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchProducts, arg.Column1, arg.BranchID)
 	if err != nil {
 		return nil, err
 	}
@@ -574,6 +865,8 @@ func (q *Queries) SearchProducts(ctx context.Context, dollar_1 sql.NullString) (
 			&i.SubUnitConversion,
 			&i.IsActive,
 			&i.ImageUrl,
+			&i.OrganizationID,
+			&i.BranchID,
 			&i.UpdatedAt,
 			&i.CategoryName,
 		); err != nil {
@@ -592,9 +885,11 @@ func (q *Queries) SearchProducts(ctx context.Context, dollar_1 sql.NullString) (
 
 const updateCategory = `-- name: UpdateCategory :one
 UPDATE category
-SET name = $2, description = $3
+SET name = COALESCE($2, name), 
+    description = COALESCE($3, description),
+    updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, description
+RETURNING id, name, description, organization_id, updated_at
 `
 
 type UpdateCategoryParams struct {
@@ -606,18 +901,33 @@ type UpdateCategoryParams struct {
 func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error) {
 	row := q.db.QueryRowContext(ctx, updateCategory, arg.ID, arg.Name, arg.Description)
 	var i Category
-	err := row.Scan(&i.ID, &i.Name, &i.Description)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.OrganizationID,
+		&i.UpdatedAt,
+	)
 	return i, err
 }
 
 const updateProduct = `-- name: UpdateProduct :one
 UPDATE product
-SET name = $2, description = $3, category_id = $4, cost_price = $5,
-    selling_price = $6, quantity_in_stock = $7, reorder_level = $8,
-    unit_of_measure = $9, sub_unit_of_measure = $10, sub_unit_conversion = $11,
-    is_active = $12, image_url = $13, updated_at = NOW()
+SET name = COALESCE($2, name), 
+    description = COALESCE($3, description), 
+    category_id = COALESCE($4, category_id), 
+    cost_price = COALESCE($5, cost_price),
+    selling_price = COALESCE($6, selling_price), 
+    quantity_in_stock = COALESCE($7, quantity_in_stock), 
+    reorder_level = COALESCE($8, reorder_level),
+    unit_of_measure = COALESCE($9, unit_of_measure), 
+    sub_unit_of_measure = COALESCE($10, sub_unit_of_measure), 
+    sub_unit_conversion = COALESCE($11, sub_unit_conversion),
+    is_active = COALESCE($12, is_active), 
+    image_url = COALESCE($13, image_url), 
+    updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, updated_at
+RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, organization_id, branch_id, updated_at
 `
 
 type UpdateProductParams struct {
@@ -667,75 +977,8 @@ func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (P
 		&i.SubUnitConversion,
 		&i.IsActive,
 		&i.ImageUrl,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateProductPrices = `-- name: UpdateProductPrices :one
-UPDATE product
-SET cost_price = $2, selling_price = $3, updated_at = NOW()
-WHERE id = $1
-RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, updated_at
-`
-
-type UpdateProductPricesParams struct {
-	ID           uuid.UUID       `json:"id"`
-	CostPrice    decimal.Decimal `json:"cost_price"`
-	SellingPrice decimal.Decimal `json:"selling_price"`
-}
-
-func (q *Queries) UpdateProductPrices(ctx context.Context, arg UpdateProductPricesParams) (Product, error) {
-	row := q.db.QueryRowContext(ctx, updateProductPrices, arg.ID, arg.CostPrice, arg.SellingPrice)
-	var i Product
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Description,
-		&i.CategoryID,
-		&i.CostPrice,
-		&i.SellingPrice,
-		&i.QuantityInStock,
-		&i.ReorderLevel,
-		&i.UnitOfMeasure,
-		&i.SubUnitOfMeasure,
-		&i.SubUnitConversion,
-		&i.IsActive,
-		&i.ImageUrl,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateProductStock = `-- name: UpdateProductStock :one
-UPDATE product
-SET quantity_in_stock = $2, updated_at = NOW()
-WHERE id = $1
-RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, updated_at
-`
-
-type UpdateProductStockParams struct {
-	ID              uuid.UUID `json:"id"`
-	QuantityInStock int32     `json:"quantity_in_stock"`
-}
-
-func (q *Queries) UpdateProductStock(ctx context.Context, arg UpdateProductStockParams) (Product, error) {
-	row := q.db.QueryRowContext(ctx, updateProductStock, arg.ID, arg.QuantityInStock)
-	var i Product
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Description,
-		&i.CategoryID,
-		&i.CostPrice,
-		&i.SellingPrice,
-		&i.QuantityInStock,
-		&i.ReorderLevel,
-		&i.UnitOfMeasure,
-		&i.SubUnitOfMeasure,
-		&i.SubUnitConversion,
-		&i.IsActive,
-		&i.ImageUrl,
+		&i.OrganizationID,
+		&i.BranchID,
 		&i.UpdatedAt,
 	)
 	return i, err
