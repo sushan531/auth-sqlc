@@ -15,34 +15,20 @@ import (
 
 const conditionalUpdateBranch = `-- name: ConditionalUpdateBranch :one
 UPDATE branches
-SET unique_name = CASE
-    WHEN $2::INT = 1 THEN $3
-    ELSE unique_name
-    END,
-    branch_name = CASE
-    WHEN $4::INT = 1 THEN $5
-    ELSE branch_name
-    END
-WHERE id = $1
+SET unique_name = coalesce($1, unique_name),
+    branch_name = coalesce($2, branch_name)
+WHERE id = $3
 RETURNING id, unique_name, branch_name, organization_id
 `
 
 type ConditionalUpdateBranchParams struct {
-	ID         uuid.UUID `json:"id"`
-	Column2    int32     `json:"column_2"`
-	UniqueName string    `json:"unique_name"`
-	Column4    int32     `json:"column_4"`
-	BranchName string    `json:"branch_name"`
+	UniqueName sql.NullString `json:"unique_name"`
+	BranchName sql.NullString `json:"branch_name"`
+	ID         uuid.UUID      `json:"id"`
 }
 
 func (q *Queries) ConditionalUpdateBranch(ctx context.Context, arg ConditionalUpdateBranchParams) (Branch, error) {
-	row := q.db.QueryRowContext(ctx, conditionalUpdateBranch,
-		arg.ID,
-		arg.Column2,
-		arg.UniqueName,
-		arg.Column4,
-		arg.BranchName,
-	)
+	row := q.db.QueryRowContext(ctx, conditionalUpdateBranch, arg.UniqueName, arg.BranchName, arg.ID)
 	var i Branch
 	err := row.Scan(
 		&i.ID,
@@ -55,22 +41,18 @@ func (q *Queries) ConditionalUpdateBranch(ctx context.Context, arg ConditionalUp
 
 const conditionalUpdateOrganization = `-- name: ConditionalUpdateOrganization :one
 UPDATE organization
-SET name = CASE
-    WHEN $2::INT = 1 THEN $3
-    ELSE name
-    END
-WHERE id = $1
+SET name = coalesce($1, name)
+WHERE id = $2
 RETURNING id, name
 `
 
 type ConditionalUpdateOrganizationParams struct {
-	ID      uuid.UUID `json:"id"`
-	Column2 int32     `json:"column_2"`
-	Name    string    `json:"name"`
+	Name sql.NullString `json:"name"`
+	ID   uuid.UUID      `json:"id"`
 }
 
 func (q *Queries) ConditionalUpdateOrganization(ctx context.Context, arg ConditionalUpdateOrganizationParams) (Organization, error) {
-	row := q.db.QueryRowContext(ctx, conditionalUpdateOrganization, arg.ID, arg.Column2, arg.Name)
+	row := q.db.QueryRowContext(ctx, conditionalUpdateOrganization, arg.Name, arg.ID)
 	var i Organization
 	err := row.Scan(&i.ID, &i.Name)
 	return i, err

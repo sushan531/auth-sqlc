@@ -46,35 +46,21 @@ func (q *Queries) ActivateProduct(ctx context.Context, id uuid.UUID) (Product, e
 
 const conditionalUpdateCategory = `-- name: ConditionalUpdateCategory :one
 UPDATE category
-SET name = CASE
-    WHEN $2::INT = 1 THEN $3
-    ELSE name
-    END,
-    description = CASE
-    WHEN $4::INT = 1 THEN $5
-    ELSE description
-    END,
+SET name = coalesce($1, name),
+    description = coalesce($2, description),
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $3
 RETURNING id, name, description, organization_id, updated_at
 `
 
 type ConditionalUpdateCategoryParams struct {
-	ID          uuid.UUID      `json:"id"`
-	Column2     int32          `json:"column_2"`
-	Name        string         `json:"name"`
-	Column4     int32          `json:"column_4"`
+	Name        sql.NullString `json:"name"`
 	Description sql.NullString `json:"description"`
+	ID          uuid.UUID      `json:"id"`
 }
 
 func (q *Queries) ConditionalUpdateCategory(ctx context.Context, arg ConditionalUpdateCategoryParams) (Category, error) {
-	row := q.db.QueryRowContext(ctx, conditionalUpdateCategory,
-		arg.ID,
-		arg.Column2,
-		arg.Name,
-		arg.Column4,
-		arg.Description,
-	)
+	row := q.db.QueryRowContext(ctx, conditionalUpdateCategory, arg.Name, arg.Description, arg.ID)
 	var i Category
 	err := row.Scan(
 		&i.ID,
@@ -88,115 +74,54 @@ func (q *Queries) ConditionalUpdateCategory(ctx context.Context, arg Conditional
 
 const conditionalUpdateProduct = `-- name: ConditionalUpdateProduct :one
 UPDATE product
-SET
-    name = CASE
-               WHEN $2::INT = 1 THEN $3
-        ELSE name
-END,
-    description = CASE
-        WHEN $4::INT = 1 THEN $5
-        ELSE description
-END,
-    category_id = CASE
-        WHEN $6::INT = 1 THEN $7
-        ELSE category_id
-END,
-    cost_price = CASE
-        WHEN $8::INT = 1 THEN $9
-        ELSE cost_price
-END,
-    selling_price = CASE
-        WHEN $10::INT = 1 THEN $11
-        ELSE selling_price
-END,
-    quantity_in_stock = CASE
-        WHEN $12::INT = 1 THEN $13
-        ELSE quantity_in_stock
-END,
-    reorder_level = CASE
-        WHEN $14::INT = 1 THEN $15
-        ELSE reorder_level
-END,
-    unit_of_measure = CASE
-        WHEN $16::INT = 1 THEN $17
-        ELSE unit_of_measure
-END,
-    sub_unit_of_measure = CASE
-        WHEN $18::INT = 1 THEN $19
-        ELSE sub_unit_of_measure
-END,
-    sub_unit_conversion = CASE
-        WHEN $20::INT = 1 THEN $21
-        ELSE sub_unit_conversion
-END,
-    is_active = CASE
-        WHEN $22::INT = 1 THEN $23
-        ELSE is_active
-END,
-    image_url = CASE
-        WHEN $24::INT = 1 THEN $25
-        ELSE image_url
-END,
+SET name = coalesce($1, name),
+    description = coalesce($2, description),
+    category_id = coalesce($3, category_id),
+    cost_price = coalesce($4, cost_price),
+    selling_price = coalesce($5, selling_price),
+    quantity_in_stock = coalesce($6, quantity_in_stock),
+    reorder_level = coalesce($7, reorder_level),
+    unit_of_measure = coalesce($8, unit_of_measure),
+    sub_unit_of_measure = coalesce($9, sub_unit_of_measure),
+    sub_unit_conversion = coalesce($10, sub_unit_conversion),
+    is_active = coalesce($11, is_active),
+    image_url = coalesce($12, image_url),
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $13
 RETURNING id, name, description, category_id, cost_price, selling_price, quantity_in_stock, reorder_level, unit_of_measure, sub_unit_of_measure, sub_unit_conversion, is_active, image_url, organization_id, branch_id, updated_at
 `
 
 type ConditionalUpdateProductParams struct {
-	ID                uuid.UUID       `json:"id"`
-	Column2           int32           `json:"column_2"`
-	Name              string          `json:"name"`
-	Column4           int32           `json:"column_4"`
-	Description       sql.NullString  `json:"description"`
-	Column6           int32           `json:"column_6"`
-	CategoryID        uuid.UUID       `json:"category_id"`
-	Column8           int32           `json:"column_8"`
-	CostPrice         decimal.Decimal `json:"cost_price"`
-	Column10          int32           `json:"column_10"`
-	SellingPrice      decimal.Decimal `json:"selling_price"`
-	Column12          int32           `json:"column_12"`
-	QuantityInStock   int32           `json:"quantity_in_stock"`
-	Column14          int32           `json:"column_14"`
-	ReorderLevel      int32           `json:"reorder_level"`
-	Column16          int32           `json:"column_16"`
-	UnitOfMeasure     string          `json:"unit_of_measure"`
-	Column18          int32           `json:"column_18"`
-	SubUnitOfMeasure  sql.NullString  `json:"sub_unit_of_measure"`
-	Column20          int32           `json:"column_20"`
-	SubUnitConversion sql.NullString  `json:"sub_unit_conversion"`
-	Column22          int32           `json:"column_22"`
-	IsActive          sql.NullBool    `json:"is_active"`
-	Column24          int32           `json:"column_24"`
-	ImageUrl          sql.NullString  `json:"image_url"`
+	Name              sql.NullString `json:"name"`
+	Description       sql.NullString `json:"description"`
+	CategoryID        uuid.NullUUID  `json:"category_id"`
+	CostPrice         sql.NullString `json:"cost_price"`
+	SellingPrice      sql.NullString `json:"selling_price"`
+	QuantityInStock   sql.NullInt32  `json:"quantity_in_stock"`
+	ReorderLevel      sql.NullInt32  `json:"reorder_level"`
+	UnitOfMeasure     sql.NullString `json:"unit_of_measure"`
+	SubUnitOfMeasure  sql.NullString `json:"sub_unit_of_measure"`
+	SubUnitConversion sql.NullString `json:"sub_unit_conversion"`
+	IsActive          sql.NullBool   `json:"is_active"`
+	ImageUrl          sql.NullString `json:"image_url"`
+	ID                uuid.UUID      `json:"id"`
 }
 
 func (q *Queries) ConditionalUpdateProduct(ctx context.Context, arg ConditionalUpdateProductParams) (Product, error) {
 	row := q.db.QueryRowContext(ctx, conditionalUpdateProduct,
-		arg.ID,
-		arg.Column2,
 		arg.Name,
-		arg.Column4,
 		arg.Description,
-		arg.Column6,
 		arg.CategoryID,
-		arg.Column8,
 		arg.CostPrice,
-		arg.Column10,
 		arg.SellingPrice,
-		arg.Column12,
 		arg.QuantityInStock,
-		arg.Column14,
 		arg.ReorderLevel,
-		arg.Column16,
 		arg.UnitOfMeasure,
-		arg.Column18,
 		arg.SubUnitOfMeasure,
-		arg.Column20,
 		arg.SubUnitConversion,
-		arg.Column22,
 		arg.IsActive,
-		arg.Column24,
 		arg.ImageUrl,
+		arg.ID,
 	)
 	var i Product
 	err := row.Scan(

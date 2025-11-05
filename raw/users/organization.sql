@@ -7,11 +7,8 @@ RETURNING id, name;
 
 -- name: ConditionalUpdateOrganization :one
 UPDATE organization
-SET name = CASE
-    WHEN $2::INT = 1 THEN $3
-    ELSE name
-    END
-WHERE id = $1
+SET name = coalesce(sqlc.narg('name'), name)
+WHERE id = sqlc.arg('id')
 RETURNING id, name;
 
 -- name: DeleteOrganization :exec
@@ -149,14 +146,8 @@ WHERE id = $1;
 
 -- name: ConditionalUpdateBranch :one
 UPDATE branches
-SET unique_name = CASE
-    WHEN $2::INT = 1 THEN $3
-    ELSE unique_name
-    END,
-    branch_name = CASE
-    WHEN $4::INT = 1 THEN $5
-    ELSE branch_name
-    END
-WHERE id = $1
+SET unique_name = coalesce(sqlc.narg('unique_name'), unique_name),
+    branch_name = coalesce(sqlc.narg('branch_name'), branch_name)
+WHERE id = sqlc.arg('id')
 RETURNING id, unique_name, branch_name, organization_id;
 

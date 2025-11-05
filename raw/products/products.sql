@@ -18,16 +18,10 @@ ORDER BY name;
 
 -- name: ConditionalUpdateCategory :one
 UPDATE category
-SET name = CASE
-    WHEN $2::INT = 1 THEN $3
-    ELSE name
-    END,
-    description = CASE
-    WHEN $4::INT = 1 THEN $5
-    ELSE description
-    END,
+SET name = coalesce(sqlc.narg('name'), name),
+    description = coalesce(sqlc.narg('description'), description),
     updated_at = NOW()
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 RETURNING *;
 
 -- name: DeleteCategory :exec
@@ -79,57 +73,20 @@ ORDER BY p.quantity_in_stock ASC;
 
 -- name: ConditionalUpdateProduct :one
 UPDATE product
-SET
-    name = CASE
-               WHEN $2::INT = 1 THEN $3
-        ELSE name
-END,
-    description = CASE
-        WHEN $4::INT = 1 THEN $5
-        ELSE description
-END,
-    category_id = CASE
-        WHEN $6::INT = 1 THEN $7
-        ELSE category_id
-END,
-    cost_price = CASE
-        WHEN $8::INT = 1 THEN $9
-        ELSE cost_price
-END,
-    selling_price = CASE
-        WHEN $10::INT = 1 THEN $11
-        ELSE selling_price
-END,
-    quantity_in_stock = CASE
-        WHEN $12::INT = 1 THEN $13
-        ELSE quantity_in_stock
-END,
-    reorder_level = CASE
-        WHEN $14::INT = 1 THEN $15
-        ELSE reorder_level
-END,
-    unit_of_measure = CASE
-        WHEN $16::INT = 1 THEN $17
-        ELSE unit_of_measure
-END,
-    sub_unit_of_measure = CASE
-        WHEN $18::INT = 1 THEN $19
-        ELSE sub_unit_of_measure
-END,
-    sub_unit_conversion = CASE
-        WHEN $20::INT = 1 THEN $21
-        ELSE sub_unit_conversion
-END,
-    is_active = CASE
-        WHEN $22::INT = 1 THEN $23
-        ELSE is_active
-END,
-    image_url = CASE
-        WHEN $24::INT = 1 THEN $25
-        ELSE image_url
-END,
+SET name = coalesce(sqlc.narg('name'), name),
+    description = coalesce(sqlc.narg('description'), description),
+    category_id = coalesce(sqlc.narg('category_id'), category_id),
+    cost_price = coalesce(sqlc.narg('cost_price'), cost_price),
+    selling_price = coalesce(sqlc.narg('selling_price'), selling_price),
+    quantity_in_stock = coalesce(sqlc.narg('quantity_in_stock'), quantity_in_stock),
+    reorder_level = coalesce(sqlc.narg('reorder_level'), reorder_level),
+    unit_of_measure = coalesce(sqlc.narg('unit_of_measure'), unit_of_measure),
+    sub_unit_of_measure = coalesce(sqlc.narg('sub_unit_of_measure'), sub_unit_of_measure),
+    sub_unit_conversion = coalesce(sqlc.narg('sub_unit_conversion'), sub_unit_conversion),
+    is_active = coalesce(sqlc.narg('is_active'), is_active),
+    image_url = coalesce(sqlc.narg('image_url'), image_url),
     updated_at = NOW()
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 RETURNING *;
 
 
