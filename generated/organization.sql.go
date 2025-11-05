@@ -13,6 +13,69 @@ import (
 	"github.com/lib/pq"
 )
 
+const conditionalUpdateBranch = `-- name: ConditionalUpdateBranch :one
+UPDATE branches
+SET unique_name = CASE
+    WHEN $2::INT = 1 THEN $3
+    ELSE unique_name
+    END,
+    branch_name = CASE
+    WHEN $4::INT = 1 THEN $5
+    ELSE branch_name
+    END
+WHERE id = $1
+RETURNING id, unique_name, branch_name, organization_id
+`
+
+type ConditionalUpdateBranchParams struct {
+	ID         uuid.UUID `json:"id"`
+	Column2    int32     `json:"column_2"`
+	UniqueName string    `json:"unique_name"`
+	Column4    int32     `json:"column_4"`
+	BranchName string    `json:"branch_name"`
+}
+
+func (q *Queries) ConditionalUpdateBranch(ctx context.Context, arg ConditionalUpdateBranchParams) (Branch, error) {
+	row := q.db.QueryRowContext(ctx, conditionalUpdateBranch,
+		arg.ID,
+		arg.Column2,
+		arg.UniqueName,
+		arg.Column4,
+		arg.BranchName,
+	)
+	var i Branch
+	err := row.Scan(
+		&i.ID,
+		&i.UniqueName,
+		&i.BranchName,
+		&i.OrganizationID,
+	)
+	return i, err
+}
+
+const conditionalUpdateOrganization = `-- name: ConditionalUpdateOrganization :one
+UPDATE organization
+SET name = CASE
+    WHEN $2::INT = 1 THEN $3
+    ELSE name
+    END
+WHERE id = $1
+RETURNING id, name
+`
+
+type ConditionalUpdateOrganizationParams struct {
+	ID      uuid.UUID `json:"id"`
+	Column2 int32     `json:"column_2"`
+	Name    string    `json:"name"`
+}
+
+func (q *Queries) ConditionalUpdateOrganization(ctx context.Context, arg ConditionalUpdateOrganizationParams) (Organization, error) {
+	row := q.db.QueryRowContext(ctx, conditionalUpdateOrganization, arg.ID, arg.Column2, arg.Name)
+	var i Organization
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
 const createBranchAndUpdateUserAccess = `-- name: CreateBranchAndUpdateUserAccess :one
 
 WITH new_branch AS (
@@ -357,48 +420,4 @@ type RemoveBranchFromUserAccessAndDeleteParams struct {
 func (q *Queries) RemoveBranchFromUserAccessAndDelete(ctx context.Context, arg RemoveBranchFromUserAccessAndDeleteParams) error {
 	_, err := q.db.ExecContext(ctx, removeBranchFromUserAccessAndDelete, arg.ID, arg.OrganizationID)
 	return err
-}
-
-const updateBranch = `-- name: UpdateBranch :one
-UPDATE branches
-SET unique_name = $2, branch_name = $3
-WHERE id = $1
-RETURNING id, unique_name, branch_name, organization_id
-`
-
-type UpdateBranchParams struct {
-	ID         uuid.UUID `json:"id"`
-	UniqueName string    `json:"unique_name"`
-	BranchName string    `json:"branch_name"`
-}
-
-func (q *Queries) UpdateBranch(ctx context.Context, arg UpdateBranchParams) (Branch, error) {
-	row := q.db.QueryRowContext(ctx, updateBranch, arg.ID, arg.UniqueName, arg.BranchName)
-	var i Branch
-	err := row.Scan(
-		&i.ID,
-		&i.UniqueName,
-		&i.BranchName,
-		&i.OrganizationID,
-	)
-	return i, err
-}
-
-const updateOrganization = `-- name: UpdateOrganization :one
-UPDATE organization
-SET name = $2
-WHERE id = $1
-RETURNING id, name
-`
-
-type UpdateOrganizationParams struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
-}
-
-func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error) {
-	row := q.db.QueryRowContext(ctx, updateOrganization, arg.ID, arg.Name)
-	var i Organization
-	err := row.Scan(&i.ID, &i.Name)
-	return i, err
 }

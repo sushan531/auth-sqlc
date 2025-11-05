@@ -16,10 +16,16 @@ SELECT * FROM category
 WHERE organization_id = $1
 ORDER BY name;
 
--- name: UpdateCategory :one
+-- name: ConditionalUpdateCategory :one
 UPDATE category
-SET name = COALESCE($2, name), 
-    description = COALESCE($3, description),
+SET name = CASE
+    WHEN $2::INT = 1 THEN $3
+    ELSE name
+    END,
+    description = CASE
+    WHEN $4::INT = 1 THEN $5
+    ELSE description
+    END,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
@@ -71,23 +77,61 @@ JOIN category c ON p.category_id = c.id
 WHERE p.branch_id = $1 AND p.quantity_in_stock <= p.reorder_level AND p.is_active = true
 ORDER BY p.quantity_in_stock ASC;
 
--- name: UpdateProduct :one
+-- name: ConditionalUpdateProduct :one
 UPDATE product
-SET name = COALESCE($2, name), 
-    description = COALESCE($3, description), 
-    category_id = COALESCE($4, category_id), 
-    cost_price = COALESCE($5, cost_price),
-    selling_price = COALESCE($6, selling_price), 
-    quantity_in_stock = COALESCE($7, quantity_in_stock), 
-    reorder_level = COALESCE($8, reorder_level),
-    unit_of_measure = COALESCE($9, unit_of_measure), 
-    sub_unit_of_measure = COALESCE($10, sub_unit_of_measure), 
-    sub_unit_conversion = COALESCE($11, sub_unit_conversion),
-    is_active = COALESCE($12, is_active), 
-    image_url = COALESCE($13, image_url), 
+SET
+    name = CASE
+               WHEN $2::INT = 1 THEN $3
+        ELSE name
+END,
+    description = CASE
+        WHEN $4::INT = 1 THEN $5
+        ELSE description
+END,
+    category_id = CASE
+        WHEN $6::INT = 1 THEN $7
+        ELSE category_id
+END,
+    cost_price = CASE
+        WHEN $8::INT = 1 THEN $9
+        ELSE cost_price
+END,
+    selling_price = CASE
+        WHEN $10::INT = 1 THEN $11
+        ELSE selling_price
+END,
+    quantity_in_stock = CASE
+        WHEN $12::INT = 1 THEN $13
+        ELSE quantity_in_stock
+END,
+    reorder_level = CASE
+        WHEN $14::INT = 1 THEN $15
+        ELSE reorder_level
+END,
+    unit_of_measure = CASE
+        WHEN $16::INT = 1 THEN $17
+        ELSE unit_of_measure
+END,
+    sub_unit_of_measure = CASE
+        WHEN $18::INT = 1 THEN $19
+        ELSE sub_unit_of_measure
+END,
+    sub_unit_conversion = CASE
+        WHEN $20::INT = 1 THEN $21
+        ELSE sub_unit_conversion
+END,
+    is_active = CASE
+        WHEN $22::INT = 1 THEN $23
+        ELSE is_active
+END,
+    image_url = CASE
+        WHEN $24::INT = 1 THEN $25
+        ELSE image_url
+END,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
 
 -- name: DeactivateProduct :one
 UPDATE product

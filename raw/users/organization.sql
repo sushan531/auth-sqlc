@@ -5,9 +5,12 @@ INSERT INTO organization (name)
 VALUES ($1)
 RETURNING id, name;
 
--- name: UpdateOrganization :one
+-- name: ConditionalUpdateOrganization :one
 UPDATE organization
-SET name = $2
+SET name = CASE
+    WHEN $2::INT = 1 THEN $3
+    ELSE name
+    END
 WHERE id = $1
 RETURNING id, name;
 
@@ -144,9 +147,16 @@ SELECT id, unique_name, branch_name, organization_id
 FROM branches
 WHERE id = $1;
 
--- name: UpdateBranch :one
+-- name: ConditionalUpdateBranch :one
 UPDATE branches
-SET unique_name = $2, branch_name = $3
+SET unique_name = CASE
+    WHEN $2::INT = 1 THEN $3
+    ELSE unique_name
+    END,
+    branch_name = CASE
+    WHEN $4::INT = 1 THEN $5
+    ELSE branch_name
+    END
 WHERE id = $1
 RETURNING id, unique_name, branch_name, organization_id;
 
